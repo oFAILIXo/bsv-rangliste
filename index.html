@@ -118,6 +118,14 @@ tr.sep td{border-bottom:2px solid var(--line);font-size:12px}
 .tip{position:absolute;pointer-events:none;background:var(--text);color:var(--bg);font-size:12px;padding:5px 8px;
   border-radius:6px;white-space:nowrap;transform:translate(-50%,-110%);display:none}
 .records{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+.help p{margin:0 0 8px;font-size:14px;color:var(--text-2)}
+.help ul{margin:0;padding-left:18px;font-size:14px;color:var(--text-2)}
+.help li{padding:3px 0}
+.help b{color:var(--text)}
+kbd{font:inherit;font-size:12px;padding:1px 6px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;background:var(--surface-2)}
+.helpgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.helpgrid .card{margin:0}
+@media (min-width:1040px){ .helpgrid{grid-template-columns:repeat(3,1fr)} }
 @media (min-width:1040px){ .records{grid-template-columns:repeat(4,1fr)} }
 .records .card{margin:0}
 .records ol{margin:0;padding:0;list-style:none;counter-reset:r}
@@ -226,6 +234,7 @@ body.tv .records li br{display:none}
   <button data-tab="rekorde" title="Taste 4">Rekorde</button>
   <button data-tab="duell" title="Taste 5">Duell</button>
   <button data-tab="spiele" title="Taste 6">Spiele</button>
+  <button data-tab="hilfe" title="Taste 7">Hilfe</button>
 </div><div class="tvbar" id="tvbar"></div></nav>
 <main>
   <div class="bar">
@@ -547,6 +556,40 @@ const VIEWS = {
       `<div class="records">${groups.flatMap(g=>g[1]).join("")}</div>`;
   },
 
+  hilfe(){
+    const wd = (DATA.weekdays || []).map(d => ["Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag","Sonntag"][d-1]);
+    const sec = (t, body) => `<div class="card help"><h2>${t}</h2>${body}</div>`;
+    return `<div class="helpgrid">
+    ${sec("Was ist das?", `<p>Alle Spiele, die auf den Vereinsboards gespielt werden, kommen automatisch aus Autodarts:
+      im Vereins-WLAN alle 5 Minuten, auf der öffentlichen Seite nach jedem Spielabend.</p>
+      <p>Gezählt werden nur entschiedene Spiele mit mindestens zwei Spielern und ohne Bots${wd.length ? `, und nur Spielabende am <b>${wd.join(", ")}</b>` : ""}.
+      Spiele nach Mitternacht zählen zum Vorabend.</p>`)}
+    ${sec("Bedienung", `<ul>
+      <li><b>Spiel</b>: Liga (501, 1 Leg, zu zweit), alle X01, Cricket, Gotcha …</li>
+      <li><b>ab</b>: nur Spiele ab diesem Datum (z. B. Saisonstart)</li>
+      <li>Auf einen <b>Namen</b> tippen öffnet das Spielerprofil</li>
+      <li>Tastatur: <kbd>1</kbd>–<kbd>7</kbd> wechseln die Reiter</li></ul>`)}
+    ${sec("Abend", `<ul>
+      <li><b>2 Punkte</b> pro Sieg; bei Gleichstand zählt der direkte Vergleich, dann der Average</li>
+      <li><b>Kreuztabelle</b>: S/N aus Sicht der Zeile, · = noch nicht gespielt</li>
+      <li><b>Noch offen</b>: Paarungen unter allen, die heute schon gespielt haben, mit Vorschlag fürs nächste Spiel</li>
+      <li><b>Bestleistung</b>: besser als an jedem früheren Abend (ab 5 Spielen)</li></ul>`)}
+    ${sec("Saison und Elo", `<ul>
+      <li>Sortiert nach <b>Siegquote</b>, gewertet ab <b>${DATA.min_evenings} Abenden</b>; wer weniger hat, steht ausgegraut darunter</li>
+      <li><b>Form</b>: die letzten 5 Spiele, grün = Sieg, rot = Niederlage</li>
+      <li><b>Elo</b>: Spielstärke, alle starten mit 1500; ein Sieg gegen Stärkere bringt mehr Punkte. Zählt unabhängig davon, wie oft jemand da ist</li></ul>`)}
+    ${sec("Rekorde", `<ul>
+      <li>X01-Rekorde aus <b>allen X01-Spielen</b>, auch mit mehreren Legs</li>
+      <li><b>Tonnen</b>: Aufnahmen ab 100 Punkten</li>
+      <li><b>Waschmaschine</b>: Single 20, Single 1 und Single 5 in einer Aufnahme</li>
+      <li><b>Madhouse</b>: Finish auf Doppel 1</li>
+      <li><b>Checkout</b>: Treffer pro Dart auf das Finish-Doppel, ab 100 Versuchen</li></ul>`)}
+    ${sec("Namen", `<p>Angezeigt werden die Autodarts-Nicknames. Gäste ohne eigenes Konto erscheinen als „Gast 1“, „Gast 2“ …,
+      solange sie keinem Spieler zugeordnet sind.</p>
+      <p>Wer ein eigenes Autodarts-Konto anlegt und damit spielt, bekommt seine Werte unter seinem Nickname.</p>`)}
+    </div>`;
+  },
+
   spiele(){
     const list = matches().slice().reverse();
     return list.length ? gamesCard(list.slice(0,300), `Spiele <small>${list.length}${list.length>300?" · die letzten 300":""}</small>`) : `<p class="empty">Keine Spiele für diese Auswahl.</p>`;
@@ -686,7 +729,7 @@ function gamesCard(list, title){
   return `<div class="card games"><h2>${title}</h2>${list.map(m=>{
     const t = new Date(m.t);
     const val = m.v==="X01" ? m.p.map(p=>fmt(p.avg)).join(" / ") : m.v==="Cricket" ? m.p.map(p=>fmt(p.mpr,2)).join(" / ") : "";
-    return `<div class="g"><span class="when">${dateDE(m.ev)}<br>${t.toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"})}</span>
+    return `<div class="g" title="Spiel-ID ${esc(m.id)}"><span class="when">${dateDE(m.ev)}<br>${t.toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"})}</span>
       <span class="who">${showVariant ? `<span class="muted">${esc(m.v)} · </span>` : ""}${m.p.map((p,i)=>i===m.w ? `<b>${esc(NAMES.get(p.id))}</b>` : esc(NAMES.get(p.id))).join(" – ")}
       ${m.legs>1 ? `<span class="muted">(${m.p.map(p=>p.lw).join(":")})</span>` : ""}</span>
       <span class="avg">${val}</span></div>`;
@@ -752,8 +795,8 @@ function render(){
 }
 document.querySelectorAll("nav button").forEach(b=>b.addEventListener("click", ()=>{ state.tab = b.dataset.tab; render(); }));
 $("#game").addEventListener("change", e => { state.game = e.target.value; render(); });
-// Tastatur (Board ohne Maus): 1–6 Reiter, Esc zurück ins Dart-Menü, wenn die Seite dort eingebettet ist
-const TABS = ["abend","saison","spieler","rekorde","duell","spiele"];
+// Tastatur (Board ohne Maus): 1–7 Reiter, Esc zurück ins Dart-Menü, wenn die Seite dort eingebettet ist
+const TABS = ["abend","saison","spieler","rekorde","duell","spiele","hilfe"];
 document.addEventListener("keydown", ev => {
   if (TV) return;
   if (ev.ctrlKey || ev.altKey || ev.metaKey || /^(INPUT|SELECT)$/.test(ev.target.tagName)) return;
