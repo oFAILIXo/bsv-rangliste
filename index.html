@@ -1,0 +1,801 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#3d3c3c">
+<title>BSV Rangliste</title>
+<link rel="icon" href="logo.png">
+<style>
+/* Vereinsfarben vom Dartkasten: Grün #247f34, Anthrazit #3d3c3c, Rot #e30613 */
+:root{
+  --brand:#247f34; --brand-hi:#2f9a44; --coal:#3d3c3c; --coal-2:#2e2d2d; --red:#e30613;
+  --bg:#eef0ee; --surface:#ffffff; --surface-2:#f3f5f3; --line:#e1e5e1;
+  --text:#1c1e1c; --text-2:#4b524c; --muted:#808780;
+  --accent:#247f34; --accent-soft:#e3f1e5;
+  --win:#1d7a2f; --win-bg:#e1f2e4; --loss:#c3050f; --loss-bg:#fbe5e6;
+  --gold:#c99a06; --silver:#9aa1a6; --bronze:#b9733a;
+  --shadow:0 1px 2px rgba(0,0,0,.05),0 4px 14px rgba(0,0,0,.05);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#191919; --surface:#242424; --surface-2:#2c2c2c; --line:#363636;
+    --text:#ececec; --text-2:#bdbdbd; --muted:#8a8a8a;
+    --accent:#3fb758; --accent-soft:#1f3a24;
+    --win:#5ccf73; --win-bg:#1f3a24; --loss:#ff6b70; --loss-bg:#45201f;
+    --gold:#e8bd3a; --silver:#b9c0c5; --bronze:#d08a50;
+    --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#191919; --surface:#242424; --surface-2:#2c2c2c; --line:#363636;
+  --text:#ececec; --text-2:#bdbdbd; --muted:#8a8a8a;
+  --accent:#3fb758; --accent-soft:#1f3a24;
+  --win:#5ccf73; --win-bg:#1f3a24; --loss:#ff6b70; --loss-bg:#45201f;
+  --gold:#e8bd3a; --silver:#b9c0c5; --bronze:#d08a50;
+  --shadow:none;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);
+  font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-variant-numeric:tabular-nums}
+
+/* Kopf: Anthrazit mit grünen Diagonalstreifen wie auf dem Dartkasten */
+header{position:relative;overflow:hidden;color:#fff;background:var(--coal)}
+header::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(160deg, transparent 0 46%, var(--brand) 46% 53%, transparent 53% 61%, var(--brand) 61% 100%)}
+.head{position:relative;max-width:1240px;margin:0 auto;padding:18px 16px 16px;display:flex;align-items:center;gap:16px}
+.logo{height:86px;width:auto;flex:0 0 auto;filter:drop-shadow(0 3px 6px rgba(0,0,0,.35))}
+.titles{min-width:0}
+.kicker{font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;opacity:.85}
+header h1{margin:2px 0 0;font-size:30px;line-height:1.05;font-weight:800;letter-spacing:-.3px}
+#stand{font-size:12px;opacity:.85;margin-top:6px}
+#stand.err{color:#ffd2d3}
+nav{position:sticky;top:0;z-index:5;background:var(--coal-2);box-shadow:0 2px 8px rgba(0,0,0,.18)}
+nav .tabs{max-width:1240px;margin:0 auto;padding:8px 12px;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+nav .tabs::-webkit-scrollbar{display:none}
+nav button{flex:0 0 auto;background:transparent;border:0;color:#d6d6d6;font:inherit;font-size:14px;font-weight:600;
+  padding:7px 14px;border-radius:999px;cursor:pointer;transition:background .15s,color .15s}
+nav button:hover{background:rgba(255,255,255,.08);color:#fff}
+nav button[aria-selected="true"]{background:var(--brand);color:#fff}
+nav button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--brand-hi);outline-offset:2px}
+@media (max-width:560px){
+  .head{padding:14px 16px 12px;gap:12px}
+  .logo{height:60px}
+  header h1{font-size:24px}
+  .kicker{font-size:11px;letter-spacing:1.5px}
+}
+
+main{max-width:1240px;margin:0 auto;padding:16px 16px 40px}
+.bar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-bottom:14px;font-size:14px;color:var(--text-2)}
+.bar label{display:flex;gap:8px;align-items:center}
+select,input[type=date]{font:inherit;font-size:14px;color:var(--text);background:var(--surface);border:1px solid var(--line);
+  border-radius:10px;padding:7px 10px;max-width:100%}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px;box-shadow:var(--shadow)}
+.card h2{margin:0 0 12px;font-size:16px;font-weight:700;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.card h2::before{content:"";width:4px;height:16px;border-radius:2px;background:var(--brand);align-self:center}
+.card h2 small{font-weight:400;color:var(--muted);font-size:13px}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:8px 8px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line)}
+tr:last-child td{border-bottom:0}
+th{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+th:nth-child(2),td:nth-child(2){text-align:left}
+tbody tr:hover td,table tr:hover td{background:var(--surface-2)}
+td.name{font-weight:600;cursor:pointer}
+td.name:hover{color:var(--accent)}
+tr.out td{color:var(--muted)}
+tr.sep td{border-bottom:2px solid var(--line);font-size:12px}
+.rank{width:2.6em;color:var(--muted);text-align:center!important}
+.rank span{display:inline-grid;place-items:center;min-width:24px;height:24px;border-radius:999px;font-size:12px;font-weight:700}
+.rank.r1 span{background:var(--gold);color:#1c1e1c}
+.rank.r2 span{background:var(--silver);color:#1c1e1c}
+.rank.r3 span{background:var(--bronze);color:#fff}
+.pts{font-weight:800;color:var(--accent)}
+.note{font-size:12px;color:var(--muted);margin:10px 0 0}
+.empty{color:var(--muted);padding:20px 0;text-align:center}
+.matrix td,.matrix th{text-align:center;padding:6px 4px;min-width:34px}
+.matrix{border-collapse:separate;border-spacing:3px}
+.matrix td{border:0;border-radius:6px}
+.matrix th{border:0}
+.matrix th.rowh{text-align:left;padding-right:10px;text-transform:none;letter-spacing:0;font-size:13px;color:var(--text)}
+.matrix td.self{background:var(--surface-2)}
+.matrix td.w{background:var(--win-bg);color:var(--win);font-weight:800}
+.matrix td.l{background:var(--loss-bg);color:var(--loss);font-weight:800}
+.matrix td.open{color:var(--muted)}
+.matrix tr:hover td{background:inherit}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:14px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px;box-shadow:var(--shadow);border-top:3px solid var(--brand)}
+.tile .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+.tile .v{font-size:24px;font-weight:800;margin-top:2px}
+.chart{position:relative}
+.chart svg{display:block;width:100%;height:auto}
+.chart .grid{stroke:var(--line);stroke-width:1}
+.chart .axis{fill:var(--muted);font-size:11px}
+.chart .line{fill:none;stroke:var(--accent);stroke-width:2;stroke-linejoin:round}
+.chart .dot{fill:var(--accent);stroke:var(--surface);stroke-width:2}
+.chart .hit{fill:transparent;cursor:pointer}
+.tip{position:absolute;pointer-events:none;background:var(--text);color:var(--bg);font-size:12px;padding:5px 8px;
+  border-radius:6px;white-space:nowrap;transform:translate(-50%,-110%);display:none}
+.records{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+@media (min-width:1040px){ .records{grid-template-columns:repeat(4,1fr)} }
+.records .card{margin:0}
+.records ol{margin:0;padding:0;list-style:none;counter-reset:r}
+.records li{padding:6px 0 6px 32px;position:relative;border-bottom:1px solid var(--line);counter-increment:r}
+.records li:last-child{border-bottom:0}
+.records li::before{content:counter(r);position:absolute;left:0;top:7px;width:22px;height:22px;border-radius:999px;
+  display:grid;place-items:center;font-size:11px;font-weight:700;background:var(--surface-2);color:var(--muted)}
+.records li:nth-child(1)::before{background:var(--gold);color:#1c1e1c}
+.records li:nth-child(2)::before{background:var(--silver);color:#1c1e1c}
+.records li:nth-child(3)::before{background:var(--bronze);color:#fff}
+.records li .val{font-weight:800;float:right}
+.records li .when{color:var(--muted);font-size:12px}
+.games .g{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
+.games .g:last-child{border-bottom:0}
+.games .when{color:var(--muted);font-size:12px;min-width:84px}
+.games .who{flex:1}
+.games .who b{color:var(--win)}
+.games .avg{color:var(--text-2);font-size:13px}
+.muted{color:var(--muted)}
+/* Form: letzte 5 Spiele */
+.form{display:inline-flex;gap:3px;margin-left:8px;vertical-align:middle}
+.form i{width:8px;height:8px;border-radius:999px;background:var(--line)}
+.form i.w{background:var(--win)}
+.form i.l{background:var(--loss)}
+/* Highlights des Abends */
+.hl{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+.hl .h{background:var(--surface-2);border-radius:12px;padding:10px 12px}
+.hl .h .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+.hl .h .v{font-size:18px;font-weight:800;margin-top:2px}
+.hl .h .s{font-size:12px;color:var(--text-2)}
+.pb{margin:12px 0 0;padding:0;list-style:none}
+.pb li{padding:6px 0;border-top:1px solid var(--line);font-size:14px}
+.pb li b{color:var(--accent)}
+/* Offene Paarungen */
+.next{display:flex;flex-direction:column;gap:2px;background:var(--accent-soft);border-left:4px solid var(--brand);border-radius:10px;padding:10px 14px;margin-bottom:12px}
+.next .k{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
+.next b{font-size:20px}
+.pairs{display:flex;flex-wrap:wrap;gap:8px}
+.pairs span{background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:14px}
+/* Duell */
+.duel{display:grid;grid-template-columns:1fr auto 1fr;gap:6px 14px;align-items:center}
+.duel .a{text-align:right}
+.duel .k{font-size:12px;color:var(--muted);text-align:center;text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+.duel .best{color:var(--accent);font-weight:800}
+.duel .head{font-size:20px;font-weight:800}
+.score{font-size:40px;font-weight:800;text-align:center;letter-spacing:2px}
+.elo-up{color:var(--win)} .elo-down{color:var(--loss)}
+/* Bildschirmschoner (?bildschirmschoner): eigene große Ansichten, Größen in rem relativ zum Bildschirm */
+html.tv{font-size:min(2.6vw, 1.45vh)}
+body.tv{cursor:none;font-size:1rem}
+body.tv header, body.tv nav .tabs, body.tv main > .bar{display:none}
+body.tv nav{position:fixed;top:auto;bottom:0;left:0;right:0;background:transparent;box-shadow:none}
+body.tv main{max-width:none;padding:1.2rem 1.2rem 1.6rem}
+body.tv .tvbar{display:block}
+.tvbar{display:none;height:.35rem;background:var(--brand);transform-origin:left;animation:tvbar linear forwards}
+.tvhead{position:relative;margin:-1.2rem -1.2rem 1.1rem;padding:1.1rem 1.2rem 1rem 6.6rem;background:var(--coal);overflow:hidden;min-height:5.6rem}
+.tvhead::before{content:"";position:absolute;inset:0;background:linear-gradient(160deg, transparent 0 50%, var(--brand) 50% 58%, transparent 58% 66%, var(--brand) 66% 100%)}
+.tvhead::after{content:"";position:absolute;left:1rem;top:.7rem;width:4.8rem;height:4.2rem;background:url(logo.png) center/contain no-repeat}
+.tvhead .k{position:relative;font-size:.8rem;font-weight:700;letter-spacing:.15rem;text-transform:uppercase;color:#fff;opacity:.85}
+.tvhead h1{position:relative;margin:.1rem 0 0;font-size:2.2rem;font-weight:800;color:#fff;line-height:1.05}
+.tvtable{width:100%;border-collapse:collapse;font-size:1.55rem}
+.tvtable th{font-size:.7rem;padding:.3rem .4rem;text-align:right}
+.tvtable td{padding:.5rem .4rem;text-align:right;border-bottom:1px solid var(--line)}
+.tvtable.many{font-size:1.3rem}
+.tvtable.many td{padding:.35rem .4rem}
+.tvtable th:nth-child(2),.tvtable td.nm{text-align:left}
+.tvtable td.nm{font-weight:700}
+.tvtable .rank span{min-width:1.9rem;height:1.9rem;font-size:1rem}
+.tvnext{margin:1rem 0;background:var(--accent-soft);border-left:.35rem solid var(--brand);border-radius:.8rem;padding:.7rem 1rem}
+.tvnext .k{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.1rem;color:var(--muted)}
+.tvnext .v{font-size:2.1rem;font-weight:800}
+.tvnext .s{font-size:1rem;color:var(--text-2);margin-top:.2rem}
+.tvtiles{display:grid;grid-template-columns:1fr 1fr;gap:.8rem}
+.tvtile{background:var(--surface);border:1px solid var(--line);border-top:.25rem solid var(--brand);border-radius:.8rem;padding:.8rem 1rem}
+.tvtile .k{font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.08rem;color:var(--muted)}
+.tvtile .v{font-size:2.4rem;font-weight:800;line-height:1.15}
+.tvtile .s{font-size:1.05rem;color:var(--text-2)}
+.tvsec{font-size:1rem;text-transform:uppercase;letter-spacing:.15rem;color:var(--accent);margin:.5rem 0 .35rem}
+body.tv .records{grid-template-columns:1fr 1fr;gap:.5rem}
+body.tv .records .card{padding:.6rem .8rem;border-radius:.8rem}
+body.tv .records .card h2{font-size:.8rem;margin:0 0 .3rem}
+body.tv .records .card h2 small{display:none}
+body.tv .records li{padding:.25rem 0 .25rem 1.7rem;font-size:1rem}
+body.tv .records li::before{width:1.2rem;height:1.2rem;font-size:.65rem;top:.4rem}
+body.tv .records li .when{display:none}
+body.tv .records li br{display:none}
+@keyframes tvbar{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@media (max-width:560px){ .hide-s{display:none} th,td{padding:8px 5px} .card{padding:14px 12px} }
+</style>
+</head>
+<body>
+<header>
+  <div class="head">
+    <img class="logo" src="logo.png" alt="BSV Bingum Darts" onerror="this.remove()">
+    <div class="titles">
+      <div class="kicker">BSV Bingum · Darts</div>
+      <h1>Rangliste</h1>
+      <div id="stand">Lade Daten …</div>
+    </div>
+  </div>
+</header>
+<nav aria-label="Ansichten"><div class="tabs" role="tablist">
+  <button data-tab="abend" aria-selected="true" title="Taste 1">Abend</button>
+  <button data-tab="saison" title="Taste 2">Saison</button>
+  <button data-tab="spieler" title="Taste 3">Spieler</button>
+  <button data-tab="rekorde" title="Taste 4">Rekorde</button>
+  <button data-tab="duell" title="Taste 5">Duell</button>
+  <button data-tab="spiele" title="Taste 6">Spiele</button>
+</div><div class="tvbar" id="tvbar"></div></nav>
+<main>
+  <div class="bar">
+    <label>Spiel <select id="game"></select></label>
+    <label>ab <input type="date" id="from"></label>
+  </div>
+  <div id="view"></div>
+</main>
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt = (x, d=1) => (x==null || isNaN(x)) ? "–" : x.toLocaleString("de-DE",{minimumFractionDigits:d,maximumFractionDigits:d});
+const pct = x => (x==null || isNaN(x)) ? "–" : Math.round(x*100) + " %";
+const dateDE = k => { const [y,m,d] = k.split("-"); return `${d}.${m}.${y}`; };
+const WD = ["So","Mo","Di","Mi","Do","Fr","Sa"];
+
+let DATA = null, state = {tab:"abend", game:"liga", from:"", evening:"", player:""};
+// Bildschirmschoner am Board (?bildschirmschoner): ohne Bedienung, Ansichten wechseln von selbst
+const TV = new URLSearchParams(location.search).has("bildschirmschoner");
+if (!TV) try { Object.assign(state, JSON.parse(localStorage.getItem("rangliste") || "{}")); } catch {}
+const save = () => { if (TV) return; try { localStorage.setItem("rangliste", JSON.stringify({tab:state.tab, game:state.game, player:state.player})); } catch {} };
+
+// Spielabend = Ortsdatum, Spiele nach Mitternacht (bis 6 Uhr) zählen zum Vorabend
+function eveningKey(iso){
+  const d = new Date(new Date(iso).getTime() - 6*3600e3);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+
+// Spiel-Filter. kind bestimmt die Kennzahlen: x01 (Average, Checkout …), cricket (MPR), plain (nur Siege)
+const MAIN = ["X01","Cricket","Gotcha"];
+const GAMES = {
+  liga:    {label:"Liga: 501, 1 Leg",   kind:"x01",     f:m=>m.v==="X01" && m.base===501 && m.out==="Double" && m.legs===1 && m.p.length===2},
+  x01:     {label:"X01 (alle)",         kind:"x01",     f:m=>m.v==="X01"},
+  cricket: {label:"Cricket",            kind:"cricket", f:m=>m.v==="Cricket"},
+  gotcha:  {label:"Gotcha",             kind:"plain",   f:m=>m.v==="Gotcha"},
+  other:   {label:"Sonstige",           kind:"plain",   f:m=>!MAIN.includes(m.v)},
+  all:     {label:"Alle Spiele",        kind:"plain",   f:()=>true},
+};
+// Gewertet werden nur entschiedene Spiele mit mindestens zwei Spielern und ohne Bots
+const valid = m => m.p.length>=2 && m.w>=0 && !m.p.some(p=>p.bot);
+const G = () => GAMES[state.game] || GAMES.liga;
+const KIND = () => G().kind;
+const PERF = {x01:{label:"Avg", key:"avg", d:1}, cricket:{label:"MPR", key:"mpr", d:2}};
+const perf = () => PERF[KIND()];
+
+// Wochentag des Spielabends, 1 = Mo … 7 = So (Einstellung "weekdays", leer = alle)
+const isoDay = ev => new Date(ev + "T12:00").getDay() || 7;
+function matches(f = G().f){
+  const wd = DATA.weekdays || [];
+  return DATA.matches.filter(m => valid(m) && f(m) && (!state.from || m.ev >= state.from) && (!wd.length || wd.includes(isoDay(m.ev))));
+}
+
+// Kennzahlen je Spieler über eine Menge Spiele
+function aggregate(list){
+  const by = new Map();
+  for (const m of list) m.p.forEach((p,i) => {
+    let a = by.get(p.id);
+    if (!a) by.set(p.id, a = {id:p.id, n:NAMES.get(p.id), sp:0, s:0, pts3:0, d:0, f9:0, f9n:0, coh:0, coa:0,
+      s180:0, s140:0, s100:0, hc:0, bl:null, mprD:0, md:0, wm:0, d1:0, xsp:0, ev:new Set()});
+    a.sp++; a.s += m.w===i; a.ev.add(m.ev); a.wm += p.wm || 0;
+    if (m.v==="X01") {
+      a.d += p.d; a.pts3 += p.avg*p.d; a.f9 += p.f9; a.f9n++;
+      a.coh += p.coh; a.coa += p.coa; a.s180 += p.s180; a.s140 += p.s140; a.s100 += p.s100;
+      a.hc = Math.max(a.hc, p.hc); if (p.bl) a.bl = a.bl ? Math.min(a.bl, p.bl) : p.bl;
+      a.d1 += p.d1 || 0; a.xsp++;
+    } else if (m.v==="Cricket") { a.mprD += p.mpr*p.d; a.md += p.d; }
+  });
+  for (const a of by.values()){
+    a.n_ = a.sp - a.s; a.pts = 2*a.s; a.q = a.sp ? a.s/a.sp : 0;
+    a.avg = a.d ? a.pts3/a.d : null; a.f9a = a.f9n ? a.f9/a.f9n : null; a.co = a.coa ? a.coh/a.coa : null;
+    a.mpr = a.md ? a.mprD/a.md : null;
+  }
+  return [...by.values()];
+}
+const perfOf = a => perf() ? (a[perf().key] ?? 0) : 0;
+
+// Form: Ergebnisse der letzten 5 Spiele je Spieler (älteste zuerst)
+function formMap(list){
+  const f = new Map();
+  for (const m of list) m.p.forEach((p,i) => { const a = f.get(p.id) || []; a.push(m.w===i); if (a.length > 5) a.shift(); f.set(p.id, a); });
+  return f;
+}
+const formHtml = r => r && r.length ? `<span class="form" title="letzte ${r.length} Spiele">${r.map(w=>`<i class="${w?"w":"l"}"></i>`).join("")}</span>` : "";
+
+// Elo-Wertung über Spiele zu zweit in zeitlicher Reihenfolge (Start 1500, K = 32)
+const ELO_START = 1500, ELO_K = 32;
+function elo(list){
+  const r = new Map(), get = id => r.get(id) || {id, elo:ELO_START, sp:0, last:null, before:ELO_START};
+  let lastEv = null;
+  for (const m of list) {
+    if (m.p.length !== 2) continue;
+    const [a, b] = m.p.map(p=>get(p.id));
+    for (const x of [a,b]) if (x.last !== m.ev) { x.before = x.elo; x.last = m.ev; }   // Stand vor dem Abend
+    const ea = 1/(1+10**((b.elo-a.elo)/400)), sa = m.w===0 ? 1 : 0;
+    a.elo += ELO_K*(sa-ea); b.elo += ELO_K*((1-sa)-(1-ea)); a.sp++; b.sp++;
+    r.set(a.id, a); r.set(b.id, b); lastEv = m.ev;
+  }
+  for (const x of r.values()) x.delta = x.last === lastEv ? x.elo - x.before : 0;
+  return r;
+}
+
+// Direkter Vergleich: Siege nur aus Spielen innerhalb der Gleichstand-Gruppe
+function h2hWins(group, list){
+  const ids = new Set(group.map(a=>a.id)), w = new Map(group.map(a=>[a.id,0]));
+  for (const m of list) if (m.p.every(p=>ids.has(p.id))) w.set(m.p[m.w].id, w.get(m.p[m.w].id)+1);
+  return w;
+}
+function rankEvening(list){
+  const rows = aggregate(list).sort((a,b)=>b.pts-a.pts);
+  const out = [];
+  for (let i=0;i<rows.length;){
+    let j=i; while (j<rows.length && rows[j].pts===rows[i].pts) j++;
+    const g = rows.slice(i,j), w = h2hWins(g, list);
+    g.sort((a,b)=> (w.get(b.id)-w.get(a.id)) || (perfOf(b)-perfOf(a)) || (b.q-a.q));
+    out.push(...g); i=j;
+  }
+  return out;
+}
+
+// Spalten je nach Spielart
+function extraHead(){
+  const P = perf(), k = KIND();
+  return (P ? `<th>${P.label}</th>` : "") +
+    (k==="x01" ? `<th class="hide-s">CO %</th><th class="hide-s">Finish</th><th class="hide-s">Leg</th>` : "");
+}
+function extraCells(a){
+  const P = perf(), k = KIND();
+  return (P ? `<td>${fmt(a[P.key], P.d)}</td>` : "") +
+    (k==="x01" ? `<td class="hide-s">${pct(a.co)}</td><td class="hide-s">${a.hc||"–"}</td><td class="hide-s">${a.bl||"–"}</td>` : "");
+}
+const tieText = () => perf() ? `direkter Vergleich, dann ${perf().label}` : "direkter Vergleich";
+
+// ---------------------------------------------------------------------
+const VIEWS = {
+  abend(){
+    const list = matches();
+    const evs = [...new Set(list.map(m=>m.ev))].sort().reverse();
+    if (!evs.length) return `<p class="empty">Keine Spiele für diese Auswahl.</p>`;
+    if (!evs.includes(state.evening)) state.evening = evs[0];
+    const day = list.filter(m=>m.ev===state.evening);
+    const rows = rankEvening(day);
+    const opts = evs.map(e=>{
+      const n = list.filter(m=>m.ev===e).length;
+      return `<option value="${e}" ${e===state.evening?"selected":""}>${WD[new Date(e+"T12:00").getDay()]} ${dateDE(e)} · ${n} Spiele</option>`;
+    }).join("");
+    let html = `<div class="bar"><label>Abend <select id="ev">${opts}</select></label></div>
+    ${highlights(day, list, rows)}
+    <div class="card"><h2>Tabelle <small>${dateDE(state.evening)} · ${esc(G().label)}</small></h2><div class="scroll"><table>
+    <tr><th class="rank">#</th><th>Spieler</th><th>Sp</th><th>S</th><th>N</th><th>Pkt</th>${extraHead()}</tr>
+    ${rows.map((a,i)=>`<tr><td class="rank ${i<3?"r"+(i+1):""}"><span>${i+1}</span></td><td class="name" data-p="${esc(a.id)}">${esc(a.n)}</td>
+      <td>${a.sp}</td><td>${a.s}</td><td>${a.n_}</td><td class="pts">${a.pts}</td>${extraCells(a)}</tr>`).join("")}
+    </table></div><p class="note">2 Punkte pro Sieg${KIND()!=="x01" ? " (bei mehreren Spielern nur für Platz 1)" : ""}. Bei Punktgleichheit: ${tieText()}.${KIND()==="x01" ? " Leg = kürzestes gewonnenes Leg in Darts." : ""}</p></div>`;
+    // Kreuztabelle nur aus Spielen zu zweit
+    const duels = day.filter(m=>m.p.length===2);
+    if (duels.length) {
+      const ids = rows.map(a=>a.id), res = new Map();
+      for (const m of duels){
+        const [x,y] = m.p, k1 = x.id+"|"+y.id, k2 = y.id+"|"+x.id;
+        (res.get(k1) || res.set(k1,[]).get(k1)).push(m.w===0 ? "S" : "N");
+        (res.get(k2) || res.set(k2,[]).get(k2)).push(m.w===1 ? "S" : "N");
+      }
+      html += `<div class="card"><h2>Jeder gegen jeden <small>Zeile gegen Spalte${duels.length<day.length ? ", nur Spiele zu zweit" : ""}</small></h2><div class="scroll"><table class="matrix">
+        <tr><th></th>${rows.map((a,i)=>`<th title="${esc(a.n)}">${i+1}</th>`).join("")}</tr>
+        ${rows.map((a,i)=>`<tr><th class="rowh">${i+1} ${esc(a.n)}</th>${ids.map(b=>{
+          if (b===a.id) return `<td class="self"></td>`;
+          const r = res.get(a.id+"|"+b);
+          if (!r) return `<td class="open">·</td>`;
+          const s = r.filter(x=>x==="S").length, cls = s*2>r.length ? "w" : s*2<r.length ? "l" : "";
+          return `<td class="${cls}">${r.length===1 ? r[0] : s+":"+(r.length-s)}</td>`;
+        }).join("")}</tr>`).join("")}
+      </table></div><p class="note">· = noch nicht gespielt</p></div>`;
+      html += openPairs(rows, duels, state.evening === evs[0]);
+    }
+    html += gamesCard(day.slice().reverse(), "Spiele des Abends");
+    return html;
+  },
+
+  saison(){
+    const list = matches(), min = DATA.min_evenings;
+    const all = aggregate(list);
+    if (!all.length) return `<p class="empty">Keine Spiele für diese Auswahl.</p>`;
+    const by = (a,b)=>(b.q-a.q)||(perfOf(b)-perfOf(a))||(b.sp-a.sp);
+    const ok = all.filter(a=>a.ev.size>=min).sort(by), rest = all.filter(a=>a.ev.size<min).sort(by);
+    const nEv = new Set(list.map(m=>m.ev)).size, x = KIND()==="x01", F = formMap(list);
+    const cols = 7 + (perf() ? 1 : 0) + (x ? 6 : 0);
+    const row = (a,i,out) => `<tr class="${out?"out":""}"><td class="rank ${!out&&i<3?"r"+(i+1):""}">${out?"":`<span>${i+1}</span>`}</td>
+      <td class="name" data-p="${esc(a.id)}">${esc(a.n)}${formHtml(F.get(a.id))}</td><td>${a.ev.size}</td><td>${a.sp}</td><td class="hide-s">${a.s}</td><td class="hide-s">${a.n_}</td>
+      <td class="pts">${pct(a.q)}</td>${perf() ? `<td>${fmt(a[perf().key], perf().d)}</td>` : ""}
+      ${x ? `<td class="hide-s">${fmt(a.f9a)}</td><td class="hide-s">${pct(a.co)}</td><td class="hide-s">${a.hc||"–"}</td><td class="hide-s">${a.bl||"–"}</td><td class="hide-s">${a.s180}</td><td class="hide-s">${a.s140}</td>` : ""}</tr>`;
+    return `<div class="card"><h2>Saison <small>${esc(G().label)} · ${state.from ? "ab "+dateDE(state.from) : "alle Spiele"} · ${nEv} Abende · ${list.length} Spiele</small></h2>
+    <div class="scroll"><table>
+    <tr><th class="rank">#</th><th>Spieler</th><th>Abende</th><th>Sp</th><th class="hide-s">S</th><th class="hide-s">N</th><th>Quote</th>${perf() ? `<th>${perf().label}</th>` : ""}
+      ${x ? `<th class="hide-s">First 9</th><th class="hide-s">CO %</th><th class="hide-s">Finish</th><th class="hide-s">Leg</th><th class="hide-s">180</th><th class="hide-s">140+</th>` : ""}</tr>
+    ${ok.map((a,i)=>row(a,i,false)).join("")}
+    ${rest.length ? `<tr class="sep"><td colspan="${cols}" class="muted" style="text-align:left">Noch nicht gewertet (weniger als ${min} Abende)</td></tr>` + rest.map(a=>row(a,0,true)).join("") : ""}
+    </table></div><p class="note">Sortiert nach Siegquote${perf() ? ", bei Gleichstand nach "+perf().label : ""}. Gewertet wird ab ${min} Abenden. Punkte hinter dem Namen: letzte 5 Spiele.</p></div>
+    ${eloCard(list)}`;
+  },
+
+  duell(){
+    const list = matches(), all = aggregate(list).sort((a,b)=>a.n.localeCompare(b.n,"de",{sensitivity:"base"}));
+    if (all.length < 2) return `<p class="empty">Keine Spiele für diese Auswahl.</p>`;
+    const ids = all.map(a=>a.id);
+    if (!ids.includes(state.d1)) state.d1 = ids.includes(state.player) ? state.player : ids[0];
+    if (!ids.includes(state.d2) || state.d2===state.d1) {
+      // Standard: häufigster Gegner
+      const c = new Map();
+      for (const m of list) if (m.p.some(p=>p.id===state.d1)) for (const p of m.p) if (p.id!==state.d1) c.set(p.id, (c.get(p.id)||0)+1);
+      state.d2 = [...c.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0] || ids.find(i=>i!==state.d1);
+    }
+    const A = all.find(a=>a.id===state.d1), B = all.find(a=>a.id===state.d2);
+    const duels = list.filter(m=>m.p.length===2 && m.p.some(p=>p.id===A.id) && m.p.some(p=>p.id===B.id));
+    const winsA = duels.filter(m=>m.p[m.w].id===A.id).length, winsB = duels.length - winsA;
+    const inDuel = aggregate(duels), dA = inDuel.find(x=>x.id===A.id), dB = inDuel.find(x=>x.id===B.id);
+    const E = elo(list), k = KIND();
+    const sel = (id, name) => `<select id="${name}">${all.map(x=>`<option value="${esc(x.id)}" ${x.id===id?"selected":""}>${esc(x.n)}</option>`).join("")}</select>`;
+    // Zeile: Wert A | Bezeichnung | Wert B; höher (oder niedriger) ist besser
+    const line = (label, va, vb, show, lowBetter=false) => {
+      const ok = va!=null && vb!=null && va!==vb, aBest = ok && (lowBetter ? va<vb : va>vb), bBest = ok && !aBest;
+      return `<div class="a ${aBest?"best":""}">${show(va)}</div><div class="k">${label}</div><div class="${bBest?"best":""}">${show(vb)}</div>`;
+    };
+    const n = v => v==null ? "–" : v, f1 = v => fmt(v), f2 = v => fmt(v,2);
+    let rows = line("Siegquote gesamt", A.q, B.q, pct) + line("Spiele gesamt", A.sp, B.sp, n);
+    if (E.get(A.id) || E.get(B.id)) rows += line("Elo", E.get(A.id)?.elo, E.get(B.id)?.elo, v=>v==null?"–":Math.round(v));
+    if (k==="x01") rows +=
+      line("Average", A.avg, B.avg, f1) + line("Average im Duell", dA?.avg, dB?.avg, f1) + line("First 9", A.f9a, B.f9a, f1) +
+      line("Checkout", A.co, B.co, pct) + line("Höchstes Finish", A.hc||null, B.hc||null, n) + line("Kürzestes Leg", A.bl, B.bl, n, true) +
+      line("Tonnen (100+)", A.s100+A.s140+A.s180, B.s100+B.s140+B.s180, n) + line("180er", A.s180, B.s180, n);
+    if (k==="cricket") rows += line("MPR", A.mpr, B.mpr, f2) + line("MPR im Duell", dA?.mpr, dB?.mpr, f2);
+    rows += line("Waschmaschinen", A.wm, B.wm, n);
+    return `<div class="bar"><label>${sel(A.id,"d1")}</label><span class="muted">gegen</span><label>${sel(B.id,"d2")}</label></div>
+    <div class="card"><h2>Direkter Vergleich <small>${esc(G().label)}</small></h2>
+      <div class="duel"><div class="a head">${esc(A.n)}</div><div class="score">${winsA}:${winsB}</div><div class="head">${esc(B.n)}</div></div>
+      <p class="note" style="text-align:center">${duels.length ? `${duels.length} Duelle, das letzte am ${dateDE(duels[duels.length-1].ev)}` : "Noch kein Duell in dieser Auswahl"}</p>
+    </div>
+    <div class="card"><h2>Werte im Vergleich</h2><div class="duel">${rows}</div>
+      <p class="note">Grün = besser. „im Duell“ zählt nur die Spiele der beiden gegeneinander.</p></div>
+    ${duels.length ? gamesCard(duels.slice().reverse().slice(0,20), "Letzte Duelle") : ""}`;
+  },
+
+  spieler(){
+    const list = matches(), all = aggregate(list).sort((a,b)=>a.n.localeCompare(b.n,"de",{sensitivity:"base"}));
+    if (!all.length) return `<p class="empty">Keine Spiele für diese Auswahl.</p>`;
+    if (!all.some(a=>a.id===state.player)) state.player = all[0].id;
+    const a = all.find(x=>x.id===state.player), k = KIND();
+    const mine = list.filter(m=>m.p.some(p=>p.id===a.id));
+    const evs = [...new Set(mine.map(m=>m.ev))].sort();
+    const opp = new Map();
+    for (const m of mine) { const i = m.p.findIndex(p=>p.id===a.id);
+      m.p.forEach((p,j)=>{ if (j===i) return; const o = opp.get(p.id) || {id:p.id, sp:0, s:0}; o.sp++; o.s += m.w===i; opp.set(p.id,o); }); }
+    const opps = [...opp.values()].sort((x,y)=>y.sp-x.sp);
+    const E = elo(list).get(a.id);
+    const tiles = tile("Spiele", a.sp) + tile("Siegquote", pct(a.q)) + tile("Abende", a.ev.size) +
+      (E ? tile("Elo", Math.round(E.elo)) : "") + tile("Form", formHtml(formMap(list).get(a.id)) || "–") +
+      (k==="x01" ? tile("Average", fmt(a.avg)) + tile("First 9", fmt(a.f9a)) + tile("Checkout", pct(a.co)) +
+        tile("Höchstes Finish", a.hc||"–") + tile("Kürzestes Leg", a.bl ? a.bl+" Darts" : "–") + tile("180er", a.s180) : "") +
+      (k==="cricket" ? tile("MPR", fmt(a.mpr,2)) : "");
+    const chartTitle = perf() ? `${perf().label === "Avg" ? "Average" : perf().label} je Abend` : "Siegquote je Abend";
+    return `<div class="bar"><label>Spieler <select id="pl">${all.map(x=>`<option value="${esc(x.id)}" ${x.id===a.id?"selected":""}>${esc(x.n)}</option>`).join("")}</select></label></div>
+    <div class="tiles">${tiles}</div>
+    <div class="card"><h2>${chartTitle}</h2>${evs.length>1 ? lineChart(playerSeries(mine, a.id)) : `<p class="empty">Ab zwei Abenden gibt es hier einen Verlauf.</p>`}</div>
+    <div class="card"><h2>Bilanz gegen …</h2><div class="scroll"><table>
+      <tr><th></th><th>Gegner</th><th>Sp</th><th>S</th><th>N</th><th>Quote</th></tr>
+      ${opps.map(o=>`<tr><td></td><td class="name" data-p="${esc(o.id)}">${esc(NAMES.get(o.id))}</td><td>${o.sp}</td><td>${o.s}</td><td>${o.sp-o.s}</td><td>${pct(o.s/o.sp)}</td></tr>`).join("")}
+    </table></div>${k!=="x01" || G()!==GAMES.liga ? `<p class="note">Bei Spielen mit mehreren Spielern zählt jeder Mitspieler als Gegner.</p>` : ""}</div>
+    ${gamesCard(mine.slice().reverse().slice(0,30), "Letzte Spiele")}`;
+  },
+
+  rekorde(tv = false){
+    // X01-Rekorde aus allen X01-Spielen (auch mit mehreren Legs), nicht nur aus Liga-Spielen
+    const N = tv ? 3 : 5;
+    const k = KIND(), list = k==="x01" ? matches(GAMES.x01.f) : matches(), P = [];
+    for (const m of list) m.p.forEach((p,i)=>P.push({...p, ev:m.ev, v:m.v, won:m.w===i, opp:m.p.filter((_,j)=>j!==i).map(q=>NAMES.get(q.id)).join(", ")}));
+    const top = (arr, val, sub) => arr.length ? `<ol>${arr.slice(0,N).map(x=>`<li>${esc(NAMES.get(x.id))} <span class="val">${val(x)}</span><br><span class="when">${sub(x)}</span></li>`).join("")}</ol>` : `<p class="empty">Noch keine</p>`;
+    const when = x => `${dateDE(x.ev)} gegen ${esc(x.opp)}`;
+    const agg = aggregate(list);
+    const evAgg = [];
+    for (const e of new Set(list.map(m=>m.ev))) for (const a of aggregate(list.filter(m=>m.ev===e))) if (a.sp>=3) evAgg.push({...a, e});
+    const card = (t, body) => `<div class="card"><h2>${t}</h2>${body}</div>`;
+    const wins = card("Meiste Siege", top(agg.slice().sort((a,b)=>b.s-a.s), x=>x.s, x=>`${x.sp} Spiele · ${pct(x.q)}`));
+    const wash = card("Waschmaschinen-Meister <small>Single 20, 1 und 5 in einer Aufnahme</small>",
+      top(agg.filter(a=>a.wm).sort((a,b)=>(b.wm-a.wm)||(a.sp-b.sp)), x=>x.wm+"×", x=>`${x.sp} Spiele · ${fmt(x.wm/x.sp)} pro Spiel`));
+    // Längste Siegesserie: aufeinanderfolgende Siege in zeitlicher Reihenfolge
+    const runs = new Map();
+    for (const m of list) m.p.forEach((p,i) => {
+      const r = runs.get(p.id) || {id:p.id, cur:0, from:null, best:0, bFrom:null, bTo:null};
+      if (m.w===i) { if (!r.cur) r.from = m.ev; r.cur++; if (r.cur > r.best) { r.best = r.cur; r.bFrom = r.from; r.bTo = m.ev; } }
+      else r.cur = 0;
+      runs.set(p.id, r);
+    });
+    const streak = card("Längste Siegesserie", top([...runs.values()].filter(r=>r.best>1).sort((a,b)=>(b.best-a.best)||(a.bTo<b.bTo?1:-1)),
+      x=>x.best+" Siege", x=>x.bFrom===x.bTo ? dateDE(x.bTo) : `${dateDE(x.bFrom)} – ${dateDE(x.bTo)}`));
+    const quote = card("Beste Siegquote <small>ab 10 Spielen</small>", top(agg.filter(a=>a.sp>=10).sort((a,b)=>b.q-a.q), x=>pct(x.q), x=>`${x.s} von ${x.sp}`));
+    const evBest = (t, key, d) => card(t, top(evAgg.slice().sort((a,b)=>b[key]-a[key]), x=>fmt(x[key], d), x=>`${dateDE(x.e)} · ${x.s} von ${x.sp} gewonnen`));
+    // Reihenfolge: je Reihe ein Thema (Gewinnen, Punkten, Finishen), die Spaßkarte jeweils rechts
+    let groups;
+    if (k==="x01") groups = [
+      ["Gewinnen", [wins, streak,
+        evBest("Bester Abend-Average <small>ab 3 Spielen</small>", "avg", 1),
+        card("Höchster Spiel-Average", top(P.filter(p=>p.v==="X01" && p.d>=9).sort((a,b)=>b.avg-a.avg), x=>fmt(x.avg), when))]],
+      ["Punkten", [
+        card("Höchster First-9-Average", top(P.filter(p=>p.v==="X01" && p.d>=9).sort((a,b)=>b.f9-a.f9), x=>fmt(x.f9), when)),
+        card("Tonnen-König <small>Aufnahmen ab 100</small>", top(agg.map(a=>({...a, tons:a.s100+a.s140+a.s180})).filter(a=>a.tons).sort((a,b)=>(b.tons-a.tons)||(a.sp-b.sp)),
+          x=>x.tons+"×", x=>`${x.s140+x.s180}× ab 140 · ${fmt(x.tons/x.sp)} pro Spiel`)),
+        card("Meiste 180er", top(agg.filter(a=>a.s180).sort((a,b)=>b.s180-a.s180), x=>x.s180, x=>`${x.sp} Spiele`)),
+        wash]],
+      ["Finishen", [
+        card("Höchstes Finish", top(P.filter(p=>p.hc).sort((a,b)=>b.hc-a.hc), x=>x.hc, when)),
+        card("Kürzestes Leg", top(P.filter(p=>p.bl).sort((a,b)=>a.bl-b.bl), x=>x.bl+" Darts", when)),
+        card("Checkout-Spezialist <small>ab 100 Versuchen</small>", top(agg.filter(a=>a.coa>=100).sort((a,b)=>b.co-a.co), x=>pct(x.co), x=>`${x.coh} von ${x.coa} Versuchen`)),
+        card("Madhouse-Meister <small>Finish auf Doppel 1</small>", top(agg.filter(a=>a.d1).sort((a,b)=>(b.d1-a.d1)||(a.sp-b.sp)), x=>x.d1+"×", x=>`${x.sp} Spiele`))]]];
+    else if (k==="cricket") groups = [["", [wins, streak,
+      evBest("Beste Abend-MPR <small>ab 3 Spielen</small>", "mpr", 2),
+      card("Höchste Spiel-MPR", top(P.filter(p=>p.d>=9).sort((a,b)=>b.mpr-a.mpr), x=>fmt(x.mpr,2), when)), quote, wash]]];
+    else groups = [["", [wins, streak, quote, wash]]];
+    if (tv) return groups.map(([t, cards]) => `${t ? `<h2 class="tvsec">${t}</h2>` : ""}<div class="records">${cards.join("")}</div>`).join("");
+    return (k==="x01" ? `<p class="note" style="margin:0 0 12px">Rekorde aus allen X01-Spielen (${list.length}), auch mit mehreren Legs.</p>` : "") +
+      `<div class="records">${groups.flatMap(g=>g[1]).join("")}</div>`;
+  },
+
+  spiele(){
+    const list = matches().slice().reverse();
+    return list.length ? gamesCard(list.slice(0,300), `Spiele <small>${list.length}${list.length>300?" · die letzten 300":""}</small>`) : `<p class="empty">Keine Spiele für diese Auswahl.</p>`;
+  },
+};
+
+const tile = (k,v) => `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div></div>`;
+
+// Highlights des Abends und persönliche Bestleistungen (Vergleich mit allen früheren Abenden)
+function highlights(day, list, rows){
+  if (!rows.length) return "";
+  const k = KIND(), P = [];
+  for (const m of day) m.p.forEach((p,i)=>P.push({...p, opp:m.p.filter((_,j)=>j!==i).map(q=>NAMES.get(q.id)).join(", ")}));
+  const best = (arr, cmp) => arr.slice().sort(cmp)[0];
+  const box = (k, v, s) => `<div class="h"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div></div>`;
+  const win = rows[0];
+  let h = box("Sieger des Abends", esc(win.n), `${win.s} von ${win.sp} gewonnen`);
+  const agg = aggregate(day);
+  if (k==="x01") {
+    const avg = best(agg.filter(a=>a.avg), (a,b)=>b.avg-a.avg);
+    const hc = best(P.filter(p=>p.hc), (a,b)=>b.hc-a.hc), bl = best(P.filter(p=>p.bl), (a,b)=>a.bl-b.bl);
+    const tons = agg.reduce((t,a)=>t+a.s100+a.s140+a.s180, 0), s180 = agg.reduce((t,a)=>t+a.s180, 0);
+    if (avg) h += box("Bester Average", fmt(avg.avg), esc(avg.n));
+    if (hc) h += box("Höchstes Finish", hc.hc, `${esc(NAMES.get(hc.id))} gegen ${esc(hc.opp)}`);
+    if (bl) h += box("Kürzestes Leg", bl.bl+" Darts", esc(NAMES.get(bl.id)));
+    h += box("Tonnen", tons, s180 ? `davon ${s180}× 180` : "Aufnahmen ab 100");
+  }
+  if (k==="cricket") { const m = best(agg.filter(a=>a.mpr), (a,b)=>b.mpr-a.mpr); if (m) h += box("Beste MPR", fmt(m.mpr,2), esc(m.n)); }
+  const wm = best(agg.filter(a=>a.wm), (a,b)=>b.wm-a.wm);
+  if (wm) h += box("Waschmaschinen", agg.reduce((t,a)=>t+a.wm,0), `meiste: ${esc(wm.n)} (${wm.wm}×)`);
+  // Persönliche Bestleistungen: besser als an jedem früheren Abend (ab 5 früheren Spielen)
+  const pbs = [];
+  if (k==="x01") {
+    const ev = day[0].ev, before = list.filter(m=>m.ev < ev);
+    const prev = new Map();
+    for (const m of before) for (const p of m.p) {
+      const x = prev.get(p.id) || {n:0, avg:0, hc:0, bl:null};
+      x.n++; x.avg = Math.max(x.avg, p.d>=9 ? p.avg : 0); x.hc = Math.max(x.hc, p.hc); if (p.bl) x.bl = x.bl ? Math.min(x.bl, p.bl) : p.bl;
+      prev.set(p.id, x);
+    }
+    const seen = new Set();
+    for (const p of P.slice().sort((a,b)=>b.avg-a.avg)) {
+      const x = prev.get(p.id); if (!x || x.n < 5) continue;
+      const nm = esc(NAMES.get(p.id));
+      if (p.d>=9 && p.avg > x.avg && !seen.has(p.id+"a")) { pbs.push(`<b>${nm}</b>: bester Spiel-Average ${fmt(p.avg)} (bisher ${fmt(x.avg)})`); seen.add(p.id+"a"); }
+      if (p.hc && p.hc > x.hc && !seen.has(p.id+"h")) { pbs.push(`<b>${nm}</b>: höchstes Finish ${p.hc} (bisher ${x.hc||"–"})`); seen.add(p.id+"h"); }
+      if (p.bl && x.bl && p.bl < x.bl && !seen.has(p.id+"l")) { pbs.push(`<b>${nm}</b>: kürzestes Leg ${p.bl} Darts (bisher ${x.bl})`); seen.add(p.id+"l"); }
+    }
+  }
+  return `<div class="card"><h2>Highlights <small>${dateDE(day[0].ev)}</small></h2><div class="hl">${h}</div>
+    ${pbs.length ? `<ul class="pb">${pbs.map(t=>`<li>🎯 Persönliche Bestleistung – ${t}</li>`).join("")}</ul>` : ""}</div>`;
+}
+
+// Offene Paarungen des Abends: anwesend ist, wer schon ein Spiel zu zweit gemacht hat.
+// Vorschlag fürs nächste Spiel: wer bisher am wenigsten gespielt hat, nicht zweimal hintereinander.
+function openPairsList(rows, duels){
+  const ids = rows.map(a=>a.id).filter(id => duels.some(m=>m.p.some(p=>p.id===id)));
+  if (ids.length < 2) return null;
+  const played = new Set(duels.map(m=>m.p.map(p=>p.id).sort().join("|")));
+  const games = new Map(ids.map(id=>[id, duels.filter(m=>m.p.some(p=>p.id===id)).length]));
+  const open = [];
+  for (let i=0;i<ids.length;i++) for (let j=i+1;j<ids.length;j++)
+    if (!played.has([ids[i],ids[j]].sort().join("|"))) open.push([ids[i],ids[j]]);
+  // Reihenfolge: zuerst Spieler mit wenig Spielen, wer gerade gespielt hat, nach hinten
+  const g = new Map(games), order = [], rest = open.slice();
+  let prev = duels[duels.length-1].p.map(p=>p.id);
+  while (rest.length) {
+    const score = x => g.get(x[0]) + g.get(x[1]) + (prev.some(id=>x.includes(id)) ? 100 : 0);
+    rest.sort((x,y) => score(x) - score(y));
+    const n = rest.shift(); order.push(n); g.set(n[0], g.get(n[0])+1); g.set(n[1], g.get(n[1])+1); prev = n;
+  }
+  return {total: ids.length*(ids.length-1)/2, order};
+}
+function openPairs(rows, duels, isLatest){
+  const op = openPairsList(rows, duels);
+  if (!op) return "";
+  const {total, order} = op, open = order;
+  if (!open.length) return `<div class="card"><h2>${isLatest ? "Noch offen" : "Nicht gespielt"}</h2><p class="empty">Alle ${total} Paarungen gespielt – jeder gegen jeden ist komplett.</p></div>`;
+  const nm = id => esc(NAMES.get(id));
+  return `<div class="card"><h2>${isLatest ? "Noch offen" : "Nicht gespielt"} <small>${total-open.length} von ${total} Paarungen gespielt</small></h2>
+    ${isLatest ? `<div class="next"><span class="k">Vorschlag nächstes Spiel</span><b>${nm(order[0][0])} – ${nm(order[0][1])}</b></div>` : ""}
+    <div class="pairs">${order.slice(isLatest ? 1 : 0).map(([a,b])=>`<span>${nm(a)} – ${nm(b)}</span>`).join("")}</div>
+    <p class="note">Anwesend ist, wer an diesem Abend schon ein Spiel zu zweit gemacht hat. Wer noch nicht gespielt hat, erscheint nach seinem ersten Spiel.${isLatest ? " Reihenfolge: wer bisher weniger gespielt hat, kommt zuerst; niemand zweimal hintereinander." : ""}</p></div>`;
+}
+
+function eloCard(list){
+  const E = [...elo(list).values()].filter(x=>x.sp>=5).sort((a,b)=>b.elo-a.elo);
+  if (!E.length) return "";
+  return `<div class="card"><h2>Elo-Wertung <small>Spielstärke aus Spielen zu zweit</small></h2><div class="scroll"><table>
+    <tr><th class="rank">#</th><th>Spieler</th><th>Elo</th><th>letzter Abend</th><th>Spiele</th></tr>
+    ${E.map((x,i)=>`<tr><td class="rank ${i<3?"r"+(i+1):""}"><span>${i+1}</span></td><td class="name" data-p="${esc(x.id)}">${esc(NAMES.get(x.id))}</td>
+      <td class="pts">${Math.round(x.elo)}</td><td class="${x.delta>0.5?"elo-up":x.delta<-0.5?"elo-down":"muted"}">${Math.abs(x.delta)<0.5?"–":(x.delta>0?"+":"")+Math.round(x.delta)}</td><td>${x.sp}</td></tr>`).join("")}
+  </table></div><p class="note">Alle starten mit ${ELO_START}. Ein Sieg gegen einen stärkeren Gegner bringt mehr Punkte als gegen einen schwächeren, unabhängig davon, wie oft jemand da ist. Ab 5 Spielen gelistet.</p></div>`;
+}
+
+// ---------------------------------------------------------------------
+// Bildschirmschoner: eigene, große Ansichten (24" hochkant, aus einigen Metern lesbar)
+function tvAbend(){
+  const list = matches(GAMES.liga.f);
+  const evs = [...new Set(list.map(m=>m.ev))].sort();
+  if (!evs.length) return `<p class="empty">Noch keine Spiele.</p>`;
+  const ev = evs[evs.length-1], day = list.filter(m=>m.ev===ev), rows = rankEvening(day);
+  const agg = aggregate(day), P = day.flatMap(m=>m.p);
+  const best = (arr, cmp) => arr.slice().sort(cmp)[0];
+  const avg = best(agg.filter(a=>a.avg), (a,b)=>b.avg-a.avg), hc = best(P.filter(p=>p.hc), (a,b)=>b.hc-a.hc);
+  const bl = best(P.filter(p=>p.bl), (a,b)=>a.bl-b.bl), wm = agg.reduce((t,a)=>t+a.wm, 0);
+  const tile = (k, v, s) => `<div class="tvtile"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div></div>`;
+  // offene Paarungen (gleiche Logik wie im Reiter Abend)
+  const open = openPairsList(rows, day.filter(m=>m.p.length===2));
+  const today = ev === eveningKey(new Date().toISOString());
+  return `<div class="tvhead"><div class="k">${today ? "Heute" : "Letzter Spielabend"}</div><h1>${WD[new Date(ev+"T12:00").getDay()]} ${dateDE(ev)}</h1></div>
+    <table class="tvtable ${rows.length > 8 ? "many" : ""}">
+      <tr><th></th><th>Spieler</th><th>S</th><th>N</th><th>Pkt</th><th>Avg</th></tr>
+      ${rows.map((a,i)=>`<tr><td class="rank ${i<3?"r"+(i+1):""}"><span>${i+1}</span></td><td class="nm">${esc(a.n)}</td>
+        <td>${a.s}</td><td>${a.n_}</td><td class="pts">${a.pts}</td><td>${fmt(a.avg)}</td></tr>`).join("")}
+    </table>
+    ${open && open.order.length ? `<div class="tvnext"><div class="k">${today ? "Nächstes Spiel" : "Nicht gespielt"}</div>
+      <div class="v">${esc(NAMES.get(open.order[0][0]))} – ${esc(NAMES.get(open.order[0][1]))}</div>
+      ${open.order.length > 1 ? `<div class="s">danach: ${open.order.slice(1,4).map(([a,b])=>`${esc(NAMES.get(a))} – ${esc(NAMES.get(b))}`).join(" · ")}${open.order.length > 4 ? " …" : ""}</div>` : ""}</div>`
+      : open ? `<div class="tvnext"><div class="v">Jeder gegen jeden komplett 🎯</div></div>` : ""}
+    <div class="tvtiles">
+      ${avg ? tile("Bester Average", fmt(avg.avg), esc(avg.n)) : ""}
+      ${hc ? tile("Höchstes Finish", hc.hc, esc(NAMES.get(hc.id))) : ""}
+      ${bl ? tile("Kürzestes Leg", bl.bl + " Darts", esc(NAMES.get(bl.id))) : ""}
+      ${tile("Waschmaschinen", wm, "Single 20, 1 und 5")}
+    </div>`;
+}
+function tvRekorde(){
+  const g = state.game; state.game = "liga";
+  const html = VIEWS.rekorde(true);
+  state.game = g;
+  return `<div class="tvhead"><div class="k">Bestenliste</div><h1>Rekorde</h1></div>${html}`;
+}
+
+function gamesCard(list, title){
+  const showVariant = G() === GAMES.other || G() === GAMES.all;
+  return `<div class="card games"><h2>${title}</h2>${list.map(m=>{
+    const t = new Date(m.t);
+    const val = m.v==="X01" ? m.p.map(p=>fmt(p.avg)).join(" / ") : m.v==="Cricket" ? m.p.map(p=>fmt(p.mpr,2)).join(" / ") : "";
+    return `<div class="g"><span class="when">${dateDE(m.ev)}<br>${t.toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"})}</span>
+      <span class="who">${showVariant ? `<span class="muted">${esc(m.v)} · </span>` : ""}${m.p.map((p,i)=>i===m.w ? `<b>${esc(NAMES.get(p.id))}</b>` : esc(NAMES.get(p.id))).join(" – ")}
+      ${m.legs>1 ? `<span class="muted">(${m.p.map(p=>p.lw).join(":")})</span>` : ""}</span>
+      <span class="avg">${val}</span></div>`;
+  }).join("")}</div>`;
+}
+
+// Verlauf je Abend: Leistungswert der Spielart, sonst Siegquote
+function playerSeries(mine, id){
+  const P = perf();
+  return [...new Set(mine.map(m=>m.ev))].sort().map(e=>{
+    const g = aggregate(mine.filter(m=>m.ev===e)).find(x=>x.id===id);
+    return P ? {e, y:g[P.key] ?? 0, label:`${P.label} ${fmt(g[P.key], P.d)}`, s:g.s, sp:g.sp}
+             : {e, y:g.q*100, label:`Quote ${pct(g.q)}`, s:g.s, sp:g.sp};
+  });
+}
+function lineChart(s){
+  const W=Math.round(Math.min(640, Math.max(300, $("#view").clientWidth - 30))), H=Math.round(W*0.4)+40, L=36, R=12, T=12, B=28;
+  const unit = KIND()==="cricket" ? 0.5 : 5;
+  const lo = Math.floor(Math.min(...s.map(x=>x.y))/unit)*unit, hi = Math.ceil(Math.max(...s.map(x=>x.y))/unit)*unit || unit;
+  const x = i => L + (s.length===1 ? (W-L-R)/2 : i*(W-L-R)/(s.length-1));
+  const y = v => T + (H-T-B)*(1-(v-lo)/((hi-lo)||1));
+  const st = Math.max(unit, Math.ceil((hi-lo)/4/unit)*unit), ticks = []; for (let v=lo; v<=hi+1e-9; v+=st) ticks.push(+v.toFixed(2));
+  const step = Math.ceil(s.length/6);
+  return `<div class="chart" data-w="${W}"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Verlauf je Abend">
+    ${ticks.map(v=>`<line class="grid" x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}"/><text class="axis" x="${L-6}" y="${y(v)+4}" text-anchor="end">${v.toLocaleString("de-DE")}</text>`).join("")}
+    ${s.map((p,i)=>(i%step===0 && s.length-1-i>=step/2)||i===s.length-1 ? `<text class="axis" x="${x(i)}" y="${H-8}" text-anchor="middle">${p.e.slice(8,10)}.${p.e.slice(5,7)}.</text>` : "").join("")}
+    <polyline class="line" points="${s.map((p,i)=>x(i)+","+y(p.y)).join(" ")}"/>
+    ${s.map((p,i)=>`<circle class="dot" cx="${x(i)}" cy="${y(p.y)}" r="4"/>`).join("")}
+    ${s.map((p,i)=>`<rect class="hit" x="${x(i)-14}" y="${T}" width="28" height="${H-T-B}" data-i="${i}"/>`).join("")}
+  </svg><div class="tip"></div></div>`;
+}
+function bindChart(series){
+  const c = document.querySelector(".chart"); if (!c) return;
+  const tip = c.querySelector(".tip"), svg = c.querySelector("svg");
+  c.querySelectorAll(".hit").forEach(r => {
+    const show = () => {
+      const p = series[+r.dataset.i], dot = svg.querySelectorAll(".dot")[+r.dataset.i];
+      const k = svg.getBoundingClientRect().width / +c.dataset.w;
+      tip.style.left = (+dot.getAttribute("cx")*k)+"px"; tip.style.top = (+dot.getAttribute("cy")*k)+"px";
+      tip.innerHTML = `${dateDE(p.e)} · ${p.label} · ${p.s}/${p.sp} Siege`; tip.style.display = "block";
+    };
+    r.addEventListener("pointerenter", show); r.addEventListener("click", show);
+    r.addEventListener("pointerleave", () => tip.style.display = "none");
+  });
+}
+
+// ---------------------------------------------------------------------
+let NAMES = new Map();
+function render(){
+  if (!GAMES[state.game]) state.game = "liga";
+  document.querySelectorAll("nav button").forEach(b=>b.setAttribute("aria-selected", b.dataset.tab===state.tab));
+  $("#game").value = state.game;
+  $("#from").value = state.from;
+  $("#view").innerHTML = VIEWS[state.tab]();
+  save();
+  $("#ev")?.addEventListener("change", e => { state.evening = e.target.value; render(); });
+  $("#pl")?.addEventListener("change", e => { state.player = e.target.value; render(); });
+  $("#d1")?.addEventListener("change", e => { state.d1 = e.target.value; render(); });
+  $("#d2")?.addEventListener("change", e => { state.d2 = e.target.value; render(); });
+  document.querySelectorAll("td.name[data-p]").forEach(td => td.addEventListener("click", () => { state.player = td.dataset.p; state.tab = "spieler"; render(); scrollTo(0,0); }));
+  if (state.tab==="spieler" && document.querySelector(".chart"))
+    bindChart(playerSeries(matches().filter(m=>m.p.some(p=>p.id===state.player)), state.player));
+}
+document.querySelectorAll("nav button").forEach(b=>b.addEventListener("click", ()=>{ state.tab = b.dataset.tab; render(); }));
+$("#game").addEventListener("change", e => { state.game = e.target.value; render(); });
+// Tastatur (Board ohne Maus): 1–6 Reiter, Esc zurück ins Dart-Menü, wenn die Seite dort eingebettet ist
+const TABS = ["abend","saison","spieler","rekorde","duell","spiele"];
+document.addEventListener("keydown", ev => {
+  if (TV) return;
+  if (ev.ctrlKey || ev.altKey || ev.metaKey || /^(INPUT|SELECT)$/.test(ev.target.tagName)) return;
+  if (ev.key === "Escape" && window.parent !== window) { ev.preventDefault(); parent.postMessage("dart-menu-back", "*"); }
+  else if (TABS[+ev.key - 1]) { ev.preventDefault(); state.tab = TABS[+ev.key - 1]; render(); }
+});
+$("#from").addEventListener("change", e => { state.from = e.target.value; render(); });
+
+// Daten laden; alle 5 Minuten neu (der Server holt im selben Takt neue Spiele)
+let first = true;
+const load = () => fetch("data.json").then(r=>r.json()).then(d => {
+  DATA = d; NAMES = new Map();
+  for (const m of d.matches) { m.ev = eveningKey(m.t); for (const p of m.p) NAMES.set(p.id, p.n); }  // neuester Name gewinnt
+  const wd = d.weekdays || [], ok = d.matches.filter(m => valid(m) && (!wd.length || wd.includes(isoDay(m.ev))));
+  $("#game").innerHTML = Object.entries(GAMES).map(([k,g]) => `<option value="${k}">${g.label} (${ok.filter(g.f).length})</option>`).join("");
+  if (first) { state.from = d.season_start || ""; first = false; }
+  const last = d.matches.length ? new Date(d.matches[d.matches.length-1].t) : null;
+  const s = d.sync || {}, hm = t => new Date(t*1000).toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"});
+  const pub = d.published ? new Date(d.published).toLocaleString("de-DE",{dateStyle:"short",timeStyle:"short"}) : "";
+  const sync = s.error ? ` · Abruf: ${s.error}` : s.last ? ` · abgerufen ${hm(s.last)}` : pub ? ` · aktualisiert ${pub}` : "";
+  $("#stand").classList.toggle("err", !!s.error);
+  if (TV) return;
+  $("#stand").textContent = `${d.matches.length} Spiele · letztes ${last ? last.toLocaleString("de-DE",{dateStyle:"short",timeStyle:"short"}) : "–"}${sync}`;
+  render();
+}).catch(() => { $("#stand").textContent = "Daten konnten nicht geladen werden."; });
+load(); setInterval(load, 300e3);
+
+if (TV) {
+  document.body.classList.add("tv");
+  document.documentElement.dataset.theme = "dark";             // immer dunkel
+  document.documentElement.classList.add("tv");
+  document.title = "Rangliste-Bildschirmschoner";
+  const VIEWS_TV = [tvAbend, tvRekorde], STEP = 30;            // Sekunden je Ansicht
+  let i = 0;
+  const next = () => {
+    if (!DATA) return;
+    $("#view").innerHTML = VIEWS_TV[i++ % VIEWS_TV.length]();
+    scrollTo(0, 0);
+    const bar = $("#tvbar"); bar.style.animation = "none"; void bar.offsetWidth; bar.style.animation = `tvbar ${STEP}s linear forwards`;
+  };
+  const wait = setInterval(() => { if (DATA) { clearInterval(wait); next(); setInterval(next, STEP*1000); } }, 300);
+}
+</script>
+</body>
+</html>
