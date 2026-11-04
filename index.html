@@ -125,6 +125,26 @@ tr.sep td{border-bottom:2px solid var(--line);font-size:12px}
 kbd{font:inherit;font-size:12px;padding:1px 6px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;background:var(--surface-2)}
 .helpgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
 .helpgrid .card{margin:0}
+.helpgrid .rules{grid-column:1/-1}
+.rules ol{margin:0;padding-left:20px;font-size:14px;color:var(--text-2);columns:2 340px;column-gap:28px}
+.rules ol>li{padding:4px 0;break-inside:avoid}
+.rules .ex{display:block;margin-top:3px;font-size:13px;color:var(--muted)}
+.rules h2 button{float:right;font:inherit;font-size:13px;padding:4px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--text);cursor:pointer}
+.print-only{display:none}
+/* „Regeln drucken“: nur das Regelblatt, hell, A4 */
+@media print {
+  @page { size: A4; margin: 15mm; }
+  body.print-rules { background:#fff !important; }
+  body.print-rules * { visibility:hidden; }
+  body.print-rules .rules, body.print-rules .rules * { visibility:visible; color:#1c1e1c !important; }
+  body.print-rules .rules { position:absolute; left:0; top:0; width:100%; margin:0; padding:0; border:0; box-shadow:none; background:#fff !important; }
+  body.print-rules .rules h2 { font-size:20pt; margin:0 0 10px; border-bottom:3px solid #1f7a3a; padding-bottom:6px; }
+  body.print-rules .rules ol { columns:1; font-size:11pt; line-height:1.45; }
+  body.print-rules .rules .ex { color:#555 !important; font-size:10pt; }
+  body.print-rules .rules .print-only { display:block; }
+  body.print-rules .rules img.print-only { height:60px; float:right; }
+  body.print-rules .no-print { display:none; }
+}
 @media (min-width:1040px){ .helpgrid{grid-template-columns:repeat(3,1fr)} }
 @media (min-width:1040px){ .records{grid-template-columns:repeat(4,1fr)} }
 .records .card{margin:0}
@@ -239,7 +259,7 @@ body.tv .records li br{display:none}
 <main>
   <div class="bar">
     <label>Spiel <select id="game"></select></label>
-    <label>ab <input type="date" id="from"></label>
+    <label>Saison <select id="season"></select></label>
   </div>
   <div id="view"></div>
 </main>
@@ -252,7 +272,7 @@ const pct = x => (x==null || isNaN(x)) ? "–" : Math.round(x*100) + " %";
 const dateDE = k => { const [y,m,d] = k.split("-"); return `${d}.${m}.${y}`; };
 const WD = ["So","Mo","Di","Mi","Do","Fr","Sa"];
 
-let DATA = null, state = {tab:"abend", game:"liga", from:"", evening:"", player:""};
+let DATA = null, state = {tab:"abend", game:"liga", season:"", from:"", to:"", evening:"", player:""};
 // Bildschirmschoner am Board (?bildschirmschoner): ohne Bedienung, Ansichten wechseln von selbst
 const TV = new URLSearchParams(location.search).has("bildschirmschoner");
 if (!TV) try { Object.assign(state, JSON.parse(localStorage.getItem("rangliste") || "{}")); } catch {}
@@ -283,9 +303,78 @@ const perf = () => PERF[KIND()];
 
 // Wochentag des Spielabends, 1 = Mo … 7 = So (Einstellung "weekdays", leer = alle)
 const isoDay = ev => new Date(ev + "T12:00").getDay() || 7;
-function matches(f = G().f){
+// alle Spiele der Spielart ohne Saisonfilter (für die Elo)
+function matchesAll(f = G().f){
   const wd = DATA.weekdays || [];
-  return DATA.matches.filter(m => valid(m) && f(m) && (!state.from || m.ev >= state.from) && (!wd.length || wd.includes(isoDay(m.ev))));
+  return DATA.matches.filter(m => valid(m) && f(m) && (!wd.length || wd.includes(isoDay(m.ev))));
+}
+// Spiele der gewählten Saison (state.from … state.to)
+function matches(f = G().f){
+  return matchesAll(f).filter(m => (!state.from || m.ev >= state.from) && (!state.to || m.ev <= state.to));
+}
+
+// Saisons aus rangliste.json ("seasons": Name, Start, Ende einschließlich).
+// Ohne Saisons gilt das alte "season_start" als offene Saison, sonst alle Spiele.
+const today = () => eveningKey(new Date().toISOString());
+const SEASONS = () => DATA.seasons && DATA.seasons.length ? DATA.seasons
+  : DATA.season_start ? [{id:DATA.season_start, name:"Saison", start:DATA.season_start, end:""}] : [];
+const seasonOf = key => SEASONS().find(s => s.id === key);
+const seasonDates = s => s.end ? `${dateDE(s.start)} – ${dateDE(s.end)}` : `ab ${dateDE(s.start)}`;
+const seasonDone = s => !!(s && s.end && s.end < today());
+// laufende Saison, sonst die zuletzt beendete (Endstand), sonst alle Spiele
+function currentSeason(){
+  const t = today(), ss = SEASONS();
+  return ss.find(s => s.start <= t && (!s.end || t <= s.end))
+    || ss.filter(s => s.end && s.end < t).sort((a,b) => a.end < b.end ? 1 : -1)[0] || null;
+}
+function applySeason(){
+  const s = seasonOf(state.season);
+  state.from = s ? s.start : ""; state.to = s ? s.end : "";
+}
+const seasonLabel = () => { const s = seasonOf(state.season); return s ? `${s.name} (${seasonDates(s)})` : "alle Spiele"; };
+
+// Preiswertung nur für 501 (Liga) innerhalb einer Saison. Gewertet wird, wer an mindestens der Hälfte
+// der Spielabende der Saison da war (mindestens ein Spiel, egal welche Spielart). Andere Spielarten: ohne Mindestabende.
+const MIN_SHARE = 0.5;
+const prizeMode = () => !!seasonOf(state.season) && state.game === "liga";
+function attendance(){
+  const all = matches(GAMES.all.f), by = new Map();
+  for (const m of all) for (const p of m.p) { if (!by.has(p.id)) by.set(p.id, new Set()); by.get(p.id).add(m.ev); }
+  const held = new Set(all.map(m=>m.ev)).size;
+  return {held, min: Math.max(1, Math.ceil(held*MIN_SHARE)), by};
+}
+
+// Bereinigte Siegquote: jeder bekommt 5 Siege und 5 Niederlagen dazu → (Siege + 5) ÷ (Spiele + 10).
+// Wenige Spiele werden Richtung 50 % gezogen, viele Spiele behalten fast ihre echte Quote.
+const BONUS = 5;
+function seasonTable(list){
+  const A = attendance();
+  return aggregate(list).map(a => ({...a, att:(A.by.get(a.id) || new Set()).size, val:(a.s + BONUS) / (a.sp + 2*BONUS)}))
+    .sort((a,b)=>(b.val-a.val)||(b.q-a.q)||(perfOf(b)-perfOf(a))||(b.sp-a.sp));
+}
+
+// Regelblatt (Reiter Hilfe, „Regeln drucken“)
+function rulesHtml(){
+  const ss = SEASONS().map(s => `<b>${esc(s.name)}</b>: ${seasonDates(s)}`).join(" · ");
+  return `<ol>
+    <li><b>Saisons</b>: ${ss || "werden vom Verein festgelegt"}. Tabelle, Rekorde und Bildschirmschoner zeigen nur die laufende Saison;
+      nach dem Ende bis zur nächsten Saison den Endstand.</li>
+    <li><b>Was zählt</b>: Spiele auf den Vereinsboards am Spielabend (Mittwoch), entschieden, mindestens zwei Spieler, keine Bots.
+      Spiele nach Mitternacht zählen zum Vorabend.</li>
+    <li><b>Preis-Tabelle 501</b> (Double-Out, 1 Leg, zu zweit): Platz 1–3. Gewertet wird, wer an mindestens der
+      <b>Hälfte der Spielabende</b> der Saison da war (mindestens ein Spiel, egal welche Spielart).</li>
+    <li><b>Wertung = bereinigte Siegquote</b>: Zu deinen Spielen kommen 5 Siege und 5 Niederlagen dazu:
+      <b>(Siege + 5) ÷ (Spiele + 10)</b>. So zählt ein Glückslauf in wenigen Spielen weniger als eine gute Quote über viele Spiele.
+      <span class="ex">Beispiel: 30 Siege aus 50 Spielen → 35 ÷ 60 = 58 %. 6 Siege aus 8 Spielen → 11 ÷ 18 = 61 % statt 75 %.</span></li>
+    <li><b>Gleichstand</b>: zuerst die normale Siegquote, dann der Average.</li>
+    <li><b>Rekordpreise</b> (aus allen X01-Spielen der Saison): <b>höchstes Finish</b>, <b>höchster Spiel-Average</b> (ab 9 Darts),
+      <b>bester Abend-Average</b> (ab 3 Spielen an einem Abend). Bei Gleichstand gewinnt, wer den Wert zuerst geworfen hat.</li>
+    <li><b>Jede 180</b>, die in der Saison in einem X01-Spiel geworfen wird, wird belohnt.</li>
+    <li><b>Cricket</b>: eigene Tabelle mit derselben bereinigten Siegquote, ohne Mindestabende und ohne Preis.</li>
+    <li><b>Fair spielen</b>: Alle, die da sind, spielen einmal gegen jeden – der Vorschlag „nächstes Spiel“ hilft dabei.</li>
+    <li><b>Einspruch</b>: Die Tabelle wird <b>eine Woche nach Saisonende</b> eingefroren. Fehler (falscher Name, Gast falsch zugeordnet,
+      fehlendes Spiel) bis dahin melden. Einsatz und Verteilung der Preise legt der Verein fest.</li>
+  </ol>`;
 }
 
 // Kennzahlen je Spieler über eine Menge Spiele
@@ -414,25 +503,35 @@ const VIEWS = {
   },
 
   saison(){
-    const list = matches(), min = DATA.min_evenings;
-    const all = aggregate(list);
-    if (!all.length) return `<p class="empty">Keine Spiele für diese Auswahl.</p>`;
-    const by = (a,b)=>(b.q-a.q)||(perfOf(b)-perfOf(a))||(b.sp-a.sp);
-    const ok = all.filter(a=>a.ev.size>=min).sort(by), rest = all.filter(a=>a.ev.size<min).sort(by);
-    const nEv = new Set(list.map(m=>m.ev)).size, x = KIND()==="x01", F = formMap(list);
-    const cols = 7 + (perf() ? 1 : 0) + (x ? 6 : 0);
+    const list = matches(), prize = prizeMode(), A = attendance(), min = prize ? A.min : 0;
+    const all = seasonTable(list);
+    if (!all.length) return `<p class="empty">${seasonOf(state.season) ? `Noch keine Spiele in der ${esc(seasonLabel())}.` : "Keine Spiele für diese Auswahl."}</p>`;
+    const ok = all.filter(a=>a.att>=min), rest = all.filter(a=>a.att<min);
+    const x = KIND()==="x01", F = formMap(list), s = seasonOf(state.season), done = seasonDone(s);
+    const cols = 8 + (perf() ? 1 : 0) + (x ? 6 : 0);
     const row = (a,i,out) => `<tr class="${out?"out":""}"><td class="rank ${!out&&i<3?"r"+(i+1):""}">${out?"":`<span>${i+1}</span>`}</td>
-      <td class="name" data-p="${esc(a.id)}">${esc(a.n)}${formHtml(F.get(a.id))}</td><td>${a.ev.size}</td><td>${a.sp}</td><td class="hide-s">${a.s}</td><td class="hide-s">${a.n_}</td>
-      <td class="pts">${pct(a.q)}</td>${perf() ? `<td>${fmt(a[perf().key], perf().d)}</td>` : ""}
+      <td class="name" data-p="${esc(a.id)}">${esc(a.n)}${formHtml(F.get(a.id))}</td><td>${a.att}</td><td>${a.sp}</td><td class="hide-s">${a.s}</td><td class="hide-s">${a.n_}</td>
+      <td class="pts" title="(${a.s} + ${BONUS}) ÷ (${a.sp} + ${2*BONUS})">${pct(a.val)}</td><td>${pct(a.q)}</td>${perf() ? `<td>${fmt(a[perf().key], perf().d)}</td>` : ""}
       ${x ? `<td class="hide-s">${fmt(a.f9a)}</td><td class="hide-s">${pct(a.co)}</td><td class="hide-s">${a.hc||"–"}</td><td class="hide-s">${a.bl||"–"}</td><td class="hide-s">${a.s180}</td><td class="hide-s">${a.s140}</td>` : ""}</tr>`;
-    return `<div class="card"><h2>Saison <small>${esc(G().label)} · ${state.from ? "ab "+dateDE(state.from) : "alle Spiele"} · ${nEv} Abende · ${list.length} Spiele</small></h2>
+    const pod = prize ? ok.slice(0,3) : [];
+    // 180er der Saison: alle X01-Spiele, jeder Spieler mit mindestens einer 180
+    const t180 = x && s ? aggregate(matches(GAMES.x01.f)).filter(a=>a.s180).sort((a,b)=>b.s180-a.s180) : null;
+    return `${pod.length ? `<div class="card"><h2>${done ? "Saisonsieger" : "Spitze der Saison"} <small>${esc(G().label)} · ${esc(seasonLabel())}${done ? " · Endstand" : " · Zwischenstand"}</small></h2>
+      <div class="tiles">${pod.map((a,i)=>`<div class="tile"><div class="k">${["🥇 Platz 1","🥈 Platz 2","🥉 Platz 3"][i]}</div><div class="v">${esc(a.n)}</div>
+        <div class="muted">Wertung ${pct(a.val)} · ${a.s} von ${a.sp} Spielen gewonnen</div></div>`).join("")}</div></div>` : ""}
+    <div class="card"><h2>${s ? "Saisontabelle" : "Tabelle"} <small>${esc(G().label)} · ${esc(seasonLabel())} · ${A.held} Spielabende · ${list.length} Spiele</small></h2>
     <div class="scroll"><table>
-    <tr><th class="rank">#</th><th>Spieler</th><th>Abende</th><th>Sp</th><th class="hide-s">S</th><th class="hide-s">N</th><th>Quote</th>${perf() ? `<th>${perf().label}</th>` : ""}
+    <tr><th class="rank">#</th><th>Spieler</th><th>Abende</th><th>Sp</th><th class="hide-s">S</th><th class="hide-s">N</th><th>Wertung</th><th>Quote</th>${perf() ? `<th>${perf().label}</th>` : ""}
       ${x ? `<th class="hide-s">First 9</th><th class="hide-s">CO %</th><th class="hide-s">Finish</th><th class="hide-s">Leg</th><th class="hide-s">180</th><th class="hide-s">140+</th>` : ""}</tr>
     ${ok.map((a,i)=>row(a,i,false)).join("")}
-    ${rest.length ? `<tr class="sep"><td colspan="${cols}" class="muted" style="text-align:left">Noch nicht gewertet (weniger als ${min} Abende)</td></tr>` + rest.map(a=>row(a,0,true)).join("") : ""}
-    </table></div><p class="note">Sortiert nach Siegquote${perf() ? ", bei Gleichstand nach "+perf().label : ""}. Gewertet wird ab ${min} Abenden. Punkte hinter dem Namen: letzte 5 Spiele.</p></div>
-    ${eloCard(list)}`;
+    ${rest.length ? `<tr class="sep"><td colspan="${cols}" class="muted" style="text-align:left">Noch nicht gewertet (weniger als ${min} von ${A.held} Abenden da)</td></tr>` + rest.map(a=>row(a,0,true)).join("") : ""}
+    </table></div><p class="note">Sortiert nach der <b>bereinigten Siegquote</b> (Wertung): (Siege + ${BONUS}) ÷ (Spiele + ${2*BONUS}).
+      Bei Gleichstand entscheidet die Siegquote${perf() ? ", dann "+perf().label : ""}.
+      ${prize ? `Gewertet wird, wer an mindestens der Hälfte der Spielabende da war (${min} von ${A.held}; jede Spielart zählt).`
+        : s ? "Ohne Mindestabende und ohne Preis." : ""} Abende = Spielabende mit mindestens einem Spiel. Punkte hinter dem Namen: letzte 5 Spiele.</p></div>
+    ${t180 ? `<div class="card"><h2>🏆 180er der Saison <small>alle X01-Spiele · jede 180 wird belohnt</small></h2>${t180.length
+      ? `<div class="scroll"><table><tr><th class="rank">#</th><th>Spieler</th><th>180er</th><th>Spiele</th></tr>${t180.map((a,i)=>`<tr><td class="rank"><span>${i+1}</span></td><td class="name" data-p="${esc(a.id)}">${esc(a.n)}</td><td class="pts">${a.s180}</td><td>${a.sp}</td></tr>`).join("")}</table></div>`
+      : `<p class="empty">In dieser Saison noch keine 180.</p>`}</div>` : ""}`;
   },
 
   duell(){
@@ -450,7 +549,7 @@ const VIEWS = {
     const duels = list.filter(m=>m.p.length===2 && m.p.some(p=>p.id===A.id) && m.p.some(p=>p.id===B.id));
     const winsA = duels.filter(m=>m.p[m.w].id===A.id).length, winsB = duels.length - winsA;
     const inDuel = aggregate(duels), dA = inDuel.find(x=>x.id===A.id), dB = inDuel.find(x=>x.id===B.id);
-    const E = elo(list), k = KIND();
+    const E = elo(matchesAll()), k = KIND();
     const sel = (id, name) => `<select id="${name}">${all.map(x=>`<option value="${esc(x.id)}" ${x.id===id?"selected":""}>${esc(x.n)}</option>`).join("")}</select>`;
     // Zeile: Wert A | Bezeichnung | Wert B; höher (oder niedriger) ist besser
     const line = (label, va, vb, show, lowBetter=false) => {
@@ -487,7 +586,7 @@ const VIEWS = {
     for (const m of mine) { const i = m.p.findIndex(p=>p.id===a.id);
       m.p.forEach((p,j)=>{ if (j===i) return; const o = opp.get(p.id) || {id:p.id, sp:0, s:0}; o.sp++; o.s += m.w===i; opp.set(p.id,o); }); }
     const opps = [...opp.values()].sort((x,y)=>y.sp-x.sp);
-    const E = elo(list).get(a.id);
+    const E = elo(matchesAll()).get(a.id);
     const tiles = tile("Spiele", a.sp) + tile("Siegquote", pct(a.q)) + tile("Abende", a.ev.size) +
       (E ? tile("Elo", Math.round(E.elo)) : "") + tile("Form", formHtml(formMap(list).get(a.id)) || "–") +
       (k==="x01" ? tile("Average", fmt(a.avg)) + tile("First 9", fmt(a.f9a)) + tile("Checkout", pct(a.co)) +
@@ -514,7 +613,9 @@ const VIEWS = {
     const agg = aggregate(list);
     const evAgg = [];
     for (const e of new Set(list.map(m=>m.ev))) for (const a of aggregate(list.filter(m=>m.ev===e))) if (a.sp>=3) evAgg.push({...a, e});
-    const card = (t, body) => `<div class="card"><h2>${t}</h2>${body}</div>`;
+    // 🏆 = Preis in der Saison (Rekordpreise und jede 180)
+    const PRIZE = /^(Höchstes Finish|Höchster Spiel-Average|Bester Abend-Average|Meiste 180er)/;
+    const card = (t, body) => `<div class="card"><h2>${state.season && PRIZE.test(t) ? "🏆 " : ""}${t}</h2>${body}</div>`;
     const wins = card("Meiste Siege", top(agg.slice().sort((a,b)=>b.s-a.s), x=>x.s, x=>`${x.sp} Spiele · ${pct(x.q)}`));
     const wash = card("Waschmaschinen-Meister <small>Single 20, 1 und 5 in einer Aufnahme</small>",
       top(agg.filter(a=>a.wm).sort((a,b)=>(b.wm-a.wm)||(a.sp-b.sp)), x=>x.wm+"×", x=>`${x.sp} Spiele · ${fmt(x.wm/x.sp)} pro Spiel`));
@@ -552,7 +653,7 @@ const VIEWS = {
       card("Höchste Spiel-MPR", top(P.filter(p=>p.d>=9).sort((a,b)=>b.mpr-a.mpr), x=>fmt(x.mpr,2), when)), quote, wash]]];
     else groups = [["", [wins, streak, quote, wash]]];
     if (tv) return groups.map(([t, cards]) => `${t ? `<h2 class="tvsec">${t}</h2>` : ""}<div class="records">${cards.join("")}</div>`).join("");
-    return (k==="x01" ? `<p class="note" style="margin:0 0 12px">Rekorde aus allen X01-Spielen (${list.length}), auch mit mehreren Legs.</p>` : "") +
+    return `<p class="note" style="margin:0 0 12px">Rekorde: <b>${esc(seasonLabel())}</b>${k==="x01" ? ` · aus allen X01-Spielen (${list.length}), auch mit mehreren Legs` : ` · ${list.length} Spiele`}.</p>` +
       `<div class="records">${groups.flatMap(g=>g[1]).join("")}</div>`;
   },
 
@@ -560,13 +661,16 @@ const VIEWS = {
     const wd = (DATA.weekdays || []).map(d => ["Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag","Sonntag"][d-1]);
     const sec = (t, body) => `<div class="card help"><h2>${t}</h2>${body}</div>`;
     return `<div class="helpgrid">
+    <div class="card help rules"><img class="print-only" src="logo.png" alt="" onerror="this.remove()">
+      <h2>Regeln der Saison <small>Wertung und Preise</small> <button type="button" id="printRules" class="no-print">Regeln drucken</button></h2>${rulesHtml()}
+      <p class="print-only ex">Aktueller Stand: ofailixo.github.io/bsv-rangliste · am Board nach 3 Minuten als Bildschirmschoner</p></div>
     ${sec("Was ist das?", `<p>Alle Spiele, die auf den Vereinsboards gespielt werden, kommen automatisch aus Autodarts:
       im Vereins-WLAN alle 5 Minuten, auf der öffentlichen Seite nach jedem Spielabend.</p>
       <p>Gezählt werden nur entschiedene Spiele mit mindestens zwei Spielern und ohne Bots${wd.length ? `, und nur Spielabende am <b>${wd.join(", ")}</b>` : ""}.
       Spiele nach Mitternacht zählen zum Vorabend.</p>`)}
     ${sec("Bedienung", `<ul>
       <li><b>Spiel</b>: Liga (501, 1 Leg, zu zweit), alle X01, Cricket, Gotcha …</li>
-      <li><b>ab</b>: nur Spiele ab diesem Datum (z. B. Saisonstart)</li>
+      <li><b>Saison</b>: Tabelle, Rekorde und alle anderen Reiter zeigen nur Spiele dieser Saison; „Alle Spiele“ = ewige Bestenliste</li>
       <li>Auf einen <b>Namen</b> tippen öffnet das Spielerprofil</li>
       <li>Tastatur: <kbd>1</kbd>–<kbd>7</kbd> wechseln die Reiter</li></ul>`)}
     ${sec("Abend", `<ul>
@@ -574,10 +678,10 @@ const VIEWS = {
       <li><b>Kreuztabelle</b>: S/N aus Sicht der Zeile, · = noch nicht gespielt</li>
       <li><b>Noch offen</b>: Paarungen unter allen, die heute schon gespielt haben, mit Vorschlag fürs nächste Spiel</li>
       <li><b>Bestleistung</b>: besser als an jedem früheren Abend (ab 5 Spielen)</li></ul>`)}
-    ${sec("Saison und Elo", `<ul>
-      <li>Sortiert nach <b>Siegquote</b>, gewertet ab <b>${DATA.min_evenings} Abenden</b>; wer weniger hat, steht ausgegraut darunter</li>
+    ${sec("Saison", `<ul>
+      <li>Wertung siehe <b>Regeln der Saison</b> oben; wer weniger als die Hälfte der Abende da war, steht ausgegraut darunter</li>
       <li><b>Form</b>: die letzten 5 Spiele, grün = Sieg, rot = Niederlage</li>
-      <li><b>Elo</b>: Spielstärke, alle starten mit 1500; ein Sieg gegen Stärkere bringt mehr Punkte. Zählt unabhängig davon, wie oft jemand da ist</li></ul>`)}
+      <li><b>Elo</b> (Spieler, Duell): Spielstärke zur Information, alle starten mit 1500. Zählt nicht für die Saisonwertung</li></ul>`)}
     ${sec("Rekorde", `<ul>
       <li>X01-Rekorde aus <b>allen X01-Spielen</b>, auch mit mehreren Legs</li>
       <li><b>Tonnen</b>: Aufnahmen ab 100 Punkten</li>
@@ -675,16 +779,6 @@ function openPairs(rows, duels, isLatest){
     <p class="note">Anwesend ist, wer an diesem Abend schon ein Spiel zu zweit gemacht hat. Wer noch nicht gespielt hat, erscheint nach seinem ersten Spiel.${isLatest ? " Reihenfolge: wer bisher weniger gespielt hat, kommt zuerst; niemand zweimal hintereinander." : ""}</p></div>`;
 }
 
-function eloCard(list){
-  const E = [...elo(list).values()].filter(x=>x.sp>=5).sort((a,b)=>b.elo-a.elo);
-  if (!E.length) return "";
-  return `<div class="card"><h2>Elo-Wertung <small>Spielstärke aus Spielen zu zweit</small></h2><div class="scroll"><table>
-    <tr><th class="rank">#</th><th>Spieler</th><th>Elo</th><th>letzter Abend</th><th>Spiele</th></tr>
-    ${E.map((x,i)=>`<tr><td class="rank ${i<3?"r"+(i+1):""}"><span>${i+1}</span></td><td class="name" data-p="${esc(x.id)}">${esc(NAMES.get(x.id))}</td>
-      <td class="pts">${Math.round(x.elo)}</td><td class="${x.delta>0.5?"elo-up":x.delta<-0.5?"elo-down":"muted"}">${Math.abs(x.delta)<0.5?"–":(x.delta>0?"+":"")+Math.round(x.delta)}</td><td>${x.sp}</td></tr>`).join("")}
-  </table></div><p class="note">Alle starten mit ${ELO_START}. Ein Sieg gegen einen stärkeren Gegner bringt mehr Punkte als gegen einen schwächeren, unabhängig davon, wie oft jemand da ist. Ab 5 Spielen gelistet.</p></div>`;
-}
-
 // ---------------------------------------------------------------------
 // Bildschirmschoner: eigene, große Ansichten (24" hochkant, aus einigen Metern lesbar)
 function tvAbend(){
@@ -721,7 +815,20 @@ function tvRekorde(){
   const g = state.game; state.game = "liga";
   const html = VIEWS.rekorde(true);
   state.game = g;
-  return `<div class="tvhead"><div class="k">Bestenliste</div><h1>Rekorde</h1></div>${html}`;
+  const s = seasonOf(state.season);
+  return `<div class="tvhead"><div class="k">${s ? esc(s.name) : "Bestenliste"}</div><h1>Rekorde</h1></div>${html}`;
+}
+function tvSaison(){
+  const g = state.game; state.game = "liga";
+  const list = matches(), s = seasonOf(state.season), min = s ? attendance().min : 0;
+  const rows = seasonTable(list).filter(a=>a.att>=min).slice(0,12);
+  state.game = g;
+  return `<div class="tvhead"><div class="k">${s ? esc(s.name) + (seasonDone(s) ? " · Endstand" : "") : "Alle Spiele"}</div><h1>Saisontabelle 501</h1></div>
+    ${rows.length ? `<table class="tvtable ${rows.length > 8 ? "many" : ""}">
+      <tr><th></th><th>Spieler</th><th>Sp</th><th>S</th><th>Quote</th><th>Wertung</th></tr>
+      ${rows.map((a,i)=>`<tr><td class="rank ${i<3?"r"+(i+1):""}"><span>${i+1}</span></td><td class="nm">${esc(a.n)}</td>
+        <td>${a.sp}</td><td>${a.s}</td><td>${pct(a.q)}</td><td class="pts">${pct(a.val)}</td></tr>`).join("")}
+    </table>` : `<p class="empty">Noch niemand mit ${min} Spielabenden.</p>`}`;
 }
 
 function gamesCard(list, title){
@@ -782,17 +889,19 @@ function render(){
   if (!GAMES[state.game]) state.game = "liga";
   document.querySelectorAll("nav button").forEach(b=>b.setAttribute("aria-selected", b.dataset.tab===state.tab));
   $("#game").value = state.game;
-  $("#from").value = state.from;
+  $("#season").value = state.season;
   $("#view").innerHTML = VIEWS[state.tab]();
   save();
   $("#ev")?.addEventListener("change", e => { state.evening = e.target.value; render(); });
   $("#pl")?.addEventListener("change", e => { state.player = e.target.value; render(); });
+  $("#printRules")?.addEventListener("click", () => { document.body.classList.add("print-rules"); print(); });
   $("#d1")?.addEventListener("change", e => { state.d1 = e.target.value; render(); });
   $("#d2")?.addEventListener("change", e => { state.d2 = e.target.value; render(); });
   document.querySelectorAll("td.name[data-p]").forEach(td => td.addEventListener("click", () => { state.player = td.dataset.p; state.tab = "spieler"; render(); scrollTo(0,0); }));
   if (state.tab==="spieler" && document.querySelector(".chart"))
     bindChart(playerSeries(matches().filter(m=>m.p.some(p=>p.id===state.player)), state.player));
 }
+addEventListener("afterprint", () => document.body.classList.remove("print-rules"));
 document.querySelectorAll("nav button").forEach(b=>b.addEventListener("click", ()=>{ state.tab = b.dataset.tab; render(); }));
 $("#game").addEventListener("change", e => { state.game = e.target.value; render(); });
 // Tastatur (Board ohne Maus): 1–7 Reiter, Esc zurück ins Dart-Menü, wenn die Seite dort eingebettet ist
@@ -803,7 +912,7 @@ document.addEventListener("keydown", ev => {
   if (ev.key === "Escape" && window.parent !== window) { ev.preventDefault(); parent.postMessage("dart-menu-back", "*"); }
   else if (TABS[+ev.key - 1]) { ev.preventDefault(); state.tab = TABS[+ev.key - 1]; render(); }
 });
-$("#from").addEventListener("change", e => { state.from = e.target.value; render(); });
+$("#season").addEventListener("change", e => { state.season = e.target.value; applySeason(); render(); });
 
 // Daten laden; alle 5 Minuten neu (der Server holt im selben Takt neue Spiele)
 let first = true;
@@ -812,7 +921,10 @@ const load = () => fetch("data.json").then(r=>r.json()).then(d => {
   for (const m of d.matches) { m.ev = eveningKey(m.t); for (const p of m.p) NAMES.set(p.id, p.n); }  // neuester Name gewinnt
   const wd = d.weekdays || [], ok = d.matches.filter(m => valid(m) && (!wd.length || wd.includes(isoDay(m.ev))));
   $("#game").innerHTML = Object.entries(GAMES).map(([k,g]) => `<option value="${k}">${g.label} (${ok.filter(g.f).length})</option>`).join("");
-  if (first) { state.from = d.season_start || ""; first = false; }
+  $("#season").innerHTML = SEASONS().map(s => `<option value="${esc(s.id)}">${esc(s.name)} (${seasonDates(s)})</option>`).join("") + `<option value="">Alle Spiele</option>`;
+  // Start: laufende Saison (dazwischen der Endstand der letzten); der Bildschirmschoner folgt immer der laufenden Saison
+  if (first || TV || !seasonOf(state.season) && state.season) { state.season = currentSeason()?.id || ""; first = false; }
+  applySeason();
   const last = d.matches.length ? new Date(d.matches[d.matches.length-1].t) : null;
   const s = d.sync || {}, hm = t => new Date(t*1000).toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"});
   const pub = d.published ? new Date(d.published).toLocaleString("de-DE",{dateStyle:"short",timeStyle:"short"}) : "";
@@ -829,7 +941,7 @@ if (TV) {
   document.documentElement.dataset.theme = "dark";             // immer dunkel
   document.documentElement.classList.add("tv");
   document.title = "Rangliste-Bildschirmschoner";
-  const VIEWS_TV = [tvAbend, tvRekorde], STEP = 30;            // Sekunden je Ansicht
+  const VIEWS_TV = [tvAbend, tvSaison, tvRekorde], STEP = 30;           // Sekunden je Ansicht
   let i = 0;
   const next = () => {
     if (!DATA) return;
