@@ -125,6 +125,9 @@ tr.sep td{border-bottom:2px solid var(--line);font-size:12px}
 .tiles.pod{grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-bottom:0}
 .tiles.pod .tile{min-width:0}
 .tiles.pod .tile .v{font-size:20px;line-height:1.2;overflow-wrap:anywhere}
+.heat{display:block;width:100%;max-width:620px;height:auto;margin:0 auto}
+.segs{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:12px}
+.segs span{background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:13px}
 .chart{position:relative}
 .chart svg{display:block;width:100%;height:auto}
 .chart .grid{stroke:var(--line);stroke-width:1}
@@ -276,7 +279,8 @@ body.tv .records li br{display:none}
   <button data-tab="rekorde" title="Taste 4">Rekorde</button>
   <button data-tab="duell" title="Taste 5">Duell</button>
   <button data-tab="spiele" title="Taste 6">Spiele</button>
-  <button data-tab="hilfe" title="Taste 7">Hilfe</button>
+  <button data-tab="heatmaps" title="Taste 7">Heatmaps</button>
+  <button data-tab="hilfe" title="Taste 8">Hilfe</button>
 </div><div class="tvbar" id="tvbar"></div></nav>
 <main>
   <div class="bar">
@@ -294,7 +298,7 @@ const pct = x => (x==null || isNaN(x)) ? "–" : Math.round(x*100) + " %";
 const dateDE = k => { const [y,m,d] = k.split("-"); return `${d}.${m}.${y}`; };
 const WD = ["So","Mo","Di","Mi","Do","Fr","Sa"];
 
-let DATA = null, state = {tab:"abend", game:"liga", season:"", from:"", to:"", evening:"", player:"", pf:""};
+let DATA = null, state = {tab:"abend", game:"liga", season:"", from:"", to:"", evening:"", player:"", pf:"", hp:"", hev:"", hm:""};
 // Bildschirmschoner am Board (?bildschirmschoner): ohne Bedienung, Ansichten wechseln von selbst
 const TV = new URLSearchParams(location.search).has("bildschirmschoner");
 if (!TV) try { Object.assign(state, JSON.parse(localStorage.getItem("rangliste") || "{}")); } catch {}
@@ -307,6 +311,7 @@ const hashOf = (s = state) => {
   if (s.tab === "spieler" && s.player) q.push("player=" + e(s.player));
   if (s.tab === "duell" && s.d1 && s.d2) q.push("d1=" + e(s.d1), "d2=" + e(s.d2));
   if (s.tab === "spiele" && s.pf) q.push("f=" + e(s.pf));
+  if (s.tab === "heatmaps" && s.hp) q.push("hp=" + e(s.hp));
   return "#" + q.join("&");
 };
 // Hash lesen und prüfen (unbekannte Werte werden ignoriert); true, wenn ein Hash da war
@@ -319,8 +324,8 @@ function applyHash(){
   if (Object.hasOwn(GAMES, h.game)) state.game = h.game;
   state.season = h.season === "alle" ? "" : seasonOf(h.season) ? h.season : (currentSeason()?.id || "");
   applySeason();
-  for (const [k, f] of [["player","player"], ["d1","d1"], ["d2","d2"], ["f","pf"]])
-    if (NAMES.has(h[k])) state[f] = h[k]; else if (k === "f") state.pf = "";
+  for (const [k, f] of [["player","player"], ["d1","d1"], ["d2","d2"], ["f","pf"], ["hp","hp"]])
+    if (NAMES.has(h[k])) state[f] = h[k]; else if (k === "f" || k === "hp") state[f] = "";
   return true;
 }
 // Adresse nachziehen: push = neuer Verlaufseintrag (Benutzeraktion), sonst ersetzen (Neuzeichnen)
@@ -727,7 +732,7 @@ const VIEWS = {
       <li><b>Spiel</b>: Liga (501, 1 Leg, zu zweit), alle X01, Cricket, Gotcha …</li>
       <li><b>Saison</b>: Tabelle, Rekorde und alle anderen Reiter zeigen nur Spiele dieser Saison; „Alle Spiele“ = ewige Bestenliste</li>
       <li>Auf einen <b>Namen</b> tippen öffnet das Spielerprofil</li>
-      <li>Tastatur: <kbd>1</kbd>–<kbd>7</kbd> wechseln die Reiter</li></ul>`)}
+      <li>Tastatur: <kbd>1</kbd>–<kbd>8</kbd> wechseln die Reiter</li></ul>`)}
     ${sec("Abend", `<ul>
       <li><b>2 Punkte</b> pro Sieg; bei Gleichstand zählt der direkte Vergleich, dann der Average</li>
       <li><b>Kreuztabelle</b>: S/N aus Sicht der Zeile, · = noch nicht gespielt</li>
@@ -759,7 +764,102 @@ const VIEWS = {
     return bar + gamesCard(list.slice(0,300), `Spiele <small>${cut ? `die letzten 300 von ${list.length}` : list.length}</small>`) +
       (cut ? `<p class="note">300 von ${list.length} Spielen angezeigt (die neuesten). Zum Eingrenzen oben einen Spieler, die Saison oder die Spielart wählen.</p>` : "");
   },
+
+  // Heatmap der Treffer: Spieler (oder alle), Abend, einzelnes Spiel; Spielart und Saison von oben
+  heatmaps(){
+    const all = matches();
+    const pls = [...new Set(all.flatMap(m=>m.p.map(p=>p.id)))].map(id=>({id, n:NAMES.get(id)})).sort((a,b)=>a.n.localeCompare(b.n,"de",{sensitivity:"base"}));
+    if (!pls.some(x=>x.id===state.hp)) state.hp = "";
+    const mine = state.hp ? all.filter(m=>m.p.some(p=>p.id===state.hp)) : all;
+    const evs = [...new Set(mine.map(m=>m.ev))].sort().reverse();
+    if (!evs.includes(state.hev)) state.hev = "";
+    const day = state.hev ? mine.filter(m=>m.ev===state.hev) : [];
+    if (!day.some(m=>m.id===state.hm)) state.hm = "";
+    const list = state.hm ? day.filter(m=>m.id===state.hm) : state.hev ? day : mine;
+    const o = (v, sel, t) => `<option value="${esc(v)}" ${v===sel?"selected":""}>${esc(t)}</option>`;
+    const bar = `<div class="bar"><label>Spieler <select id="hp">${o("", state.hp, "alle Spieler")}${pls.map(x=>o(x.id, state.hp, x.n)).join("")}</select></label>
+      <label>Abend <select id="hev">${o("", state.hev, "gesamt")}${evs.map(e=>o(e, state.hev, `${WD[new Date(e+"T12:00").getDay()]} ${dateDE(e)}`)).join("")}</select></label>
+      ${state.hev ? `<label>Spiel <select id="hm">${o("", state.hm, "alle Spiele des Abends")}${day.slice().reverse().map(m=>o(m.id, state.hm,
+        `${new Date(m.t).toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"})} ${m.p.map(p=>NAMES.get(p.id)).join(" – ")}`)).join("")}</select></label>` : ""}</div>`;
+    if (!list.length) return bar + `<p class="empty">Keine Spiele für diese Auswahl.</p>`;
+    const xy = [];
+    let missing = 0;
+    for (const m of list) for (const p of m.p) {
+      if (state.hp && p.id!==state.hp) continue;
+      if (!p.xy) { missing++; continue; }
+      for (let i = 0; i < p.xy.length; i += 2) xy.push(p.xy[i], p.xy[i+1]);
+    }
+    const n = xy.length / 2, segs = new Map();
+    for (let i = 0; i < xy.length; i += 2) { const s = segName(xy[i], xy[i+1]); segs.set(s, (segs.get(s)||0) + 1); }
+    const top = [...segs.entries()].sort((a,b)=>b[1]-a[1]).slice(0, 10);
+    const who = state.hp ? NAMES.get(state.hp) : "alle Spieler";
+    const when = state.hm ? "ein Spiel" : state.hev ? dateDE(state.hev) : seasonLabel();
+    return bar + `<div class="card"><h2>Heatmap <small>${esc(who)} · ${esc(G().label)} · ${esc(when)} · ${n} Darts aus ${list.length} Spiel${list.length===1?"":"en"}</small></h2>
+      ${heatBoard(xy)}
+      ${top.length ? `<div class="segs">${top.map(([s,c])=>`<span><b>${s}</b> ${Math.round(c/n*100)} %</span>`).join("")}</div>` : `<p class="empty">Für diese Auswahl gibt es keine Trefferpunkte.</p>`}
+      <p class="note">Je heller (gelb/rot), desto öfter getroffen. Unten die häufigsten Felder.${missing ? ` ${missing} Spielerzeilen ohne Trefferpunkte (vor der Heatmap gespeichert, nachladen mit <code>dart-rangliste nachladen</code>).` : ""}</p></div>`;
+  },
 };
+
+// Dartboard (Maße in mm wie bei Autodarts: Bull 7, 25 bis 16,5, Triple 97–107, Doppel 160–170) mit Heatmap. Trefferpunkte xy in Tausendsteln des Doppelrings, y nach oben.
+const BOARD_NUMS = [20,1,18,4,13,6,10,15,2,17,3,19,7,16,8,11,14,9,12,5];
+function segName(x, y){
+  const r = Math.hypot(x, y) * .17, n = BOARD_NUMS[Math.round(Math.atan2(x, y) * 180 / Math.PI / 18 + 20) % 20];
+  return r <= 7 ? "Bull" : r <= 16.5 ? "25" : r > 170 ? "Daneben" : r >= 160 ? "D" + n : r >= 97 && r <= 107 ? "T" + n : String(n);
+}
+function heatBoard(xy){
+  const R = 275, arc = (r1, r2, a1, a2) => {   // Ringstück zwischen r1 und r2, Winkel im Uhrzeigersinn ab oben
+    const p = (r, a) => `${(r*Math.sin(a*Math.PI/180)).toFixed(2)} ${(-r*Math.cos(a*Math.PI/180)).toFixed(2)}`;
+    return `<path d="M${p(r2,a1)} A${r2} ${r2} 0 0 1 ${p(r2,a2)} L${p(r1,a2)} A${r1} ${r1} 0 0 0 ${p(r1,a1)}Z"/>`;
+  };
+  let segs = "", nums = "";
+  BOARD_NUMS.forEach((num, i) => {
+    const a1 = i*18 - 9, a2 = a1 + 18, dark = i % 2 === 0;
+    segs += `<g fill="${dark ? "#121212" : "#efe2cf"}">${arc(16.5, 97, a1, a2)}${arc(107, 160, a1, a2)}</g>`
+         + `<g fill="${dark ? "#d8243a" : "#13945a"}">${arc(97, 107, a1, a2)}${arc(160, 170, a1, a2)}</g>`;
+    const t = i*18*Math.PI/180;
+    nums += `<text x="${(249*Math.sin(t)).toFixed(1)}" y="${(-249*Math.cos(t)).toFixed(1)}">${num}</text>`;
+  });
+  return `<svg class="heat" viewBox="${-R} ${-R} ${2*R} ${2*R}" role="img" aria-label="Dartboard mit Treffer-Heatmap">
+    <circle r="272" fill="#2a2a2a"/><circle r="228" fill="#050505"/>
+    <g stroke="#9a9a9a" stroke-width=".6">${segs}</g>
+    <g fill="#bdbdbd" font-size="30" font-weight="700" text-anchor="middle" dominant-baseline="central" font-family="system-ui,sans-serif">${nums}</g>
+    <circle r="16.5" fill="#13945a" stroke="#9a9a9a" stroke-width=".6"/><circle r="7" fill="#d8243a"/>
+    <path id="arcTop" d="M-199 0A199 199 0 0 1 199 0" fill="none"/><path id="arcBot" d="M-199 0A199 199 0 0 0 199 0" fill="none"/>
+    <g fill="#efe2cf" font-weight="800" text-anchor="middle" dominant-baseline="central" font-family="system-ui,sans-serif" letter-spacing="4">
+      <text font-size="38"><textPath href="#arcTop" startOffset="50%">BSV</textPath></text>
+      <text font-size="34"><textPath href="#arcBot" startOffset="50%">Bingum</textPath></text></g>
+    <image href="logo.png" x="-227" y="-26" width="52" height="52"/><image href="logo.png" x="175" y="-26" width="52" height="52"/>
+    ${xy.length ? `<image href="${heatImage(xy, R)}" x="${-R}" y="${-R}" width="${2*R}" height="${2*R}"/>` : ""}
+  </svg>`;
+}
+// Dichte auf einem Raster (1 mm je Pixel) mit Gauß-Fleck je Dart, dann Farbverlauf blau → grün → gelb → rot
+function heatImage(xy, R){
+  const S = 2*R, g = new Float32Array(S*S), K = 12, sig = 4.5, ker = [];
+  for (let dy = -K; dy <= K; dy++) for (let dx = -K; dx <= K; dx++) ker.push(dx, dy, Math.exp(-(dx*dx + dy*dy) / (2*sig*sig)));
+  for (let i = 0; i < xy.length; i += 2) {
+    const cx = Math.round(xy[i]*.17) + R, cy = R - Math.round(xy[i+1]*.17);
+    for (let k = 0; k < ker.length; k += 3) {
+      const x = cx + ker[k], y = cy + ker[k+1];
+      if (x >= 0 && y >= 0 && x < S && y < S) g[y*S + x] += ker[k+2];
+    }
+  }
+  let max = 0; for (const v of g) if (v > max) max = v;
+  const sparse = Math.min(1, 25 / max);                 // 1 = wenige Darts, gegen 0 = sehr viele übereinander
+  const c = document.createElement("canvas"); c.width = c.height = S;
+  const ctx = c.getContext("2d"), img = ctx.createImageData(S, S), stops = [[0,40,110,255],[.25,0,160,255],[.5,0,220,90],[.75,255,235,0],[1,255,40,0]];
+  for (let j = 0; j < g.length; j++) {
+    if (!g[j]) continue;
+    // Farbe relativ zur dichtesten Stelle; bei dünn besetzter Karte (ein Spieler, ein Abend) ist jeder einzelne Dart
+    // mindestens grün und in der Mitte voll deckend. Bei vielen Darts (alle Spieler) bleibt das Board sichtbar.
+    const rel = (g[j] / max) ** .5, v = Math.max(rel, Math.min(1, g[j]) * .62 * sparse);
+    let s = 1; while (s < stops.length - 1 && stops[s][0] < v) s++;
+    const [p0, r0, g0, b0] = stops[s-1], [p1, r1, g1, b1] = stops[s], f = (v - p0) / (p1 - p0);
+    img.data.set([r0 + (r1-r0)*f, g0 + (g1-g0)*f, b0 + (b1-b0)*f, Math.min(1, g[j] * 1.4) * Math.min(1, .15 + .35 * sparse + rel * 1.5) * 245], j*4);
+  }
+  ctx.putImageData(img, 0, 0);
+  return c.toDataURL();
+}
 
 const tile = (k,v) => `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div></div>`;
 
@@ -961,6 +1061,9 @@ function render(push){
   $("#ev")?.addEventListener("change", e => { state.evening = e.target.value; render(); });
   $("#pl")?.addEventListener("change", e => { state.player = e.target.value; render(true); });
   $("#pf")?.addEventListener("change", e => { state.pf = e.target.value; render(true); });
+  $("#hp")?.addEventListener("change", e => { state.hp = e.target.value; render(true); });
+  $("#hev")?.addEventListener("change", e => { state.hev = e.target.value; state.hm = ""; render(); });
+  $("#hm")?.addEventListener("change", e => { state.hm = e.target.value; render(); });
   $("#printRules")?.addEventListener("click", () => { document.body.classList.add("print-rules"); print(); });
   $("#d1")?.addEventListener("change", e => { state.d1 = e.target.value; render(true); });
   $("#d2")?.addEventListener("change", e => { state.d2 = e.target.value; render(true); });
@@ -994,8 +1097,8 @@ $("#view").addEventListener("click", e => {
 });
 // Zurück/Vor im Browser: Ansicht aus der Adresse lesen
 addEventListener("popstate", () => { if (!TV && DATA && applyHash()) render(); });
-// Tastatur (Board ohne Maus): 1–7 Reiter, Esc zurück ins Dart-Menü, wenn die Seite dort eingebettet ist
-const TABS = ["abend","saison","spieler","rekorde","duell","spiele","hilfe"];
+// Tastatur (Board ohne Maus): 1–8 Reiter, Esc zurück ins Dart-Menü, wenn die Seite dort eingebettet ist
+const TABS = ["abend","saison","spieler","rekorde","duell","spiele","heatmaps","hilfe"];
 document.addEventListener("keydown", ev => {
   if (TV) return;
   if (ev.ctrlKey || ev.altKey || ev.metaKey || /^(INPUT|SELECT)$/.test(ev.target.tagName)) return;
@@ -1004,9 +1107,9 @@ document.addEventListener("keydown", ev => {
 });
 $("#season").addEventListener("change", e => { state.season = e.target.value; applySeason(); render(true); });
 
-// Daten laden; alle 5 Minuten neu (der Server holt im selben Takt neue Spiele)
+// Daten laden, jede Minute neu; ?t= (auf die Minute gerundet) umgeht den Browser-/CDN-Cache der öffentlichen Seite
 let first = true;
-const load = () => fetch("data.json").then(r=>r.json()).then(d => {
+const load = () => fetch("data.json?t=" + Math.floor(Date.now() / 6e4)).then(r=>r.json()).then(d => {
   DATA = d; NAMES = new Map();
   for (const m of d.matches) { m.ev = eveningKey(m.t); for (const p of m.p) NAMES.set(p.id, p.n); }  // neuester Name gewinnt
   const wd = d.weekdays || [], ok = d.matches.filter(m => valid(m) && (!wd.length || wd.includes(isoDay(m.ev))));
@@ -1026,7 +1129,7 @@ const load = () => fetch("data.json").then(r=>r.json()).then(d => {
   $("#stand").textContent = `${d.matches.length} Spiele · letztes ${last ? last.toLocaleString("de-DE",{dateStyle:"short",timeStyle:"short"}) : "–"}${sync}`;
   render();
 }).catch(() => { $("#stand").textContent = "Daten konnten nicht geladen werden."; });
-load(); setInterval(load, 300e3);
+load(); setInterval(load, 60e3);
 
 if (TV) {
   document.body.classList.add("tv");
